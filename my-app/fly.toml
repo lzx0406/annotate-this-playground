@@ -1,0 +1,25 @@
+# fly.toml app configuration file generated for my-app-wandering-rain-1259 on 2025-01-17T12:59:45-05:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'my-app-wandering-rain-1259'
+primary_region = 'ord'
+
+[build]
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+[env]
+  BODY_SIZE_LIMIT = 5500000
+
+[[vm]]
+  memory = '2gb'
+  cpu_kind = 'shared'
+  cpus = 1
