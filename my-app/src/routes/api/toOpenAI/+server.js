@@ -28,25 +28,6 @@ const openai = new OpenAI({
  * @param {string} responseText
  */
 // function parseResponse(responseText) {
-//   const lowerResponse = responseText
-//     .replace(/[\[\]]/g, "")
-//     .toLowerCase()
-//     .trim();
-
-//   if (["yes", "true", "1"].includes(lowerResponse)) {
-//     return "true";
-//   } else if (["no", "false", "0", "vague"].includes(lowerResponse)) {
-//     return "false";
-//   } else {
-//     // Log a warning about the unexpected response
-//     console.warn(
-//       `Warning: Unexpected response format: '${responseText}'. Expected 'Yes' or 'No'. Defaulting to 'false'.`
-//     );
-//     // Return the default value 'false'
-//     return "false";
-//   }
-// }
-// function parseResponse(responseText) {
 //   console.log(responseText);
 //   const firstWord = responseText.trim().toLowerCase().split(/\s+/)[0]; // Get the first word
 
@@ -62,28 +43,64 @@ const openai = new OpenAI({
 //   }
 // }
 
+// function parseResponse(responseText) {
+//   console.log(responseText);
+
+//   const g1Match = responseText.match(/G1:\s*(.+)/i);
+
+//   if (g1Match) {
+//     const g1Answer = g1Match[1].trim().toLowerCase();
+
+//     if (["yes", "true", "1"].includes(g1Answer)) {
+//       return "true";
+//     } else if (["no", "false", "0", "vague"].includes(g1Answer)) {
+//       return "false";
+//     } else {
+//       console.warn(
+//         `Warning: G1 answer '${g1Answer}' is unexpected. Expected 'Yes' or 'No'. Defaulting to 'false'.`
+//       );
+//       return "false";
+//     }
+//   } else {
+//     console.warn(`Warning: G1 not found in response. Defaulting to 'false'.`);
+//     return "false";
+//   }
+// }
+
 function parseResponse(responseText) {
   console.log(responseText);
 
   const g1Match = responseText.match(/G1:\s*(.+)/i);
+  const p1Match = responseText.match(/P1:\s*([\d.]+)/i);
+  const confidenceMatch = responseText.match(/Confidence:\s*(.+)/i);
+
+  let g1Answer = "false"; // Default value
+  let probability = null;
+  let confidence = null;
 
   if (g1Match) {
-    const g1Answer = g1Match[1].trim().toLowerCase();
-
+    g1Answer = g1Match[1].trim().toLowerCase();
     if (["yes", "true", "1"].includes(g1Answer)) {
-      return "true";
+      g1Answer = "true";
     } else if (["no", "false", "0", "vague"].includes(g1Answer)) {
-      return "false";
+      g1Answer = "false";
     } else {
       console.warn(
-        `Warning: G1 answer '${g1Answer}' is unexpected. Expected 'Yes' or 'No'. Defaulting to 'false'.`
+        `Unexpected G1 value: '${g1Answer}', defaulting to 'false'.`
       );
-      return "false";
+      g1Answer = "false";
     }
-  } else {
-    console.warn(`Warning: G1 not found in response. Defaulting to 'false'.`);
-    return "false";
   }
+
+  if (p1Match) {
+    probability = parseFloat(p1Match[1]); // Extract numerical probability
+  }
+
+  if (confidenceMatch) {
+    confidence = confidenceMatch[1].trim(); // Extract verbal confidence
+  }
+
+  return { prediction: g1Answer, probability, confidence };
 }
 
 /**
@@ -246,124 +263,6 @@ export async function POST({ request }) {
       writer_id
     );
 
-    // let fineTunedModelName;
-    // if (existingModelName) {
-    //   fineTunedModelName = existingModelName;
-    //   console.log(
-    //     `Using existing fine-tuned model for writer_id ${writer_id}: ${fineTunedModelName}`
-    //   );
-
-    //   latestProgress.set("starting");
-    //   await saveToJSONL(
-    //     trainingSet,
-    //     "training_data.jsonl",
-    //     system_prompt,
-    //     question
-    //   );
-    //   // await saveToJSONL(validationSet, "validation_data.jsonl", system_prompt);
-
-    //   // Upload the training file
-    //   const trainingUploadResponse = await openai.files.create({
-    //     file: fs.createReadStream("training_data.jsonl"),
-    //     purpose: "fine-tune",
-    //   });
-
-    //   console.log("Training file uploaded:", trainingUploadResponse);
-
-    //   // Upload the validation file
-    //   // const validationUploadResponse = await openai.files.create({
-    //   //   file: fs.createReadStream("validation_data.jsonl"),
-    //   //   purpose: "fine-tune",
-    //   // });
-
-    //   // console.log("Validation file uploaded:", validationUploadResponse);
-
-    //   // Create the fine-tuning job
-    //   const fineTuneResponse = await openai.fineTuning.jobs.create({
-    //     training_file: trainingUploadResponse.id,
-    //     // validation_file: validationUploadResponse.id,
-    //     model: fineTunedModelName,
-    //     hyperparameters: {
-    //       n_epochs: 5,
-    //       batch_size: 256,
-    //     },
-    //   });
-
-    //   console.log("Fine-tuning job created:", fineTuneResponse);
-
-    //   const fineTuneJobId = fineTuneResponse.id;
-
-    //   // Poll for job status
-    //   fineTunedModelName = await pollFineTuningJobStatus(
-    //     fineTuneJobId,
-    //     writer_id
-    //   );
-
-    //   if (!fineTunedModelName) {
-    //     latestProgress.set("fine-tuning failed or timed out");
-    //     throw new Error("Fine-tuning failed or timed out");
-    //   }
-
-    //   console.log("Fine-tuned model name:", fineTunedModelName);
-
-    //   // Insert the mapping into the FineTunedModels table
-    //   await connection.query(
-    //     `INSERT INTO FineTunedModels (writer_id, model_name, created_at) VALUES (?, ?, NOW())`,
-    //     [writer_id, fineTunedModelName]
-    //   );
-    // } else {
-    //   console.log(
-    //     "Didn't find a fine-tuned model for this writer, creating a new one."
-    //   );
-
-    //   latestProgress.set("starting");
-    //   await saveToJSONL(
-    //     trainingSet,
-    //     "training_data.jsonl",
-    //     system_prompt,
-    //     question
-    //   );
-
-    //   // Upload the training file
-    //   const trainingUploadResponse = await openai.files.create({
-    //     file: fs.createReadStream("training_data.jsonl"),
-    //     purpose: "fine-tune",
-    //   });
-
-    //   console.log("Training file uploaded:", trainingUploadResponse);
-    //   const fineTuneResponse = await openai.fineTuning.jobs.create({
-    //     training_file: trainingUploadResponse.id,
-    //     model: "gpt-4o-mini-2024-07-18",
-    //     hyperparameters: {
-    //       n_epochs: 5,
-    //       batch_size: 256,
-    //     },
-    //   });
-
-    //   console.log("Fine-tuning job created:", fineTuneResponse);
-
-    //   const fineTuneJobId = fineTuneResponse.id;
-
-    //   // Poll for job status
-    //   fineTunedModelName = await pollFineTuningJobStatus(
-    //     fineTuneJobId,
-    //     writer_id
-    //   );
-
-    //   if (!fineTunedModelName) {
-    //     latestProgress.set("fine-tuning failed or timed out");
-    //     throw new Error("Fine-tuning failed or timed out");
-    //   }
-
-    //   console.log("Fine-tuned model name:", fineTunedModelName);
-
-    //   // Insert the mapping into the FineTunedModels table
-    //   await connection.query(
-    //     `INSERT INTO FineTunedModels (writer_id, model_name, created_at) VALUES (?, ?, NOW())`,
-    //     [writer_id, fineTunedModelName]
-    //   );
-    // }
-
     latestProgress.set("annotating");
     console.log("QUESTION THIS TIME:" + question);
     // 1. Insert into Prompt (only once for the entire batch)
@@ -389,6 +288,8 @@ export async function POST({ request }) {
 
       let responseContent;
       let predicted_value;
+      let probability;
+      let confidence;
 
       // Construct the base prompt with video and comment information
       const concat_sys =
@@ -418,7 +319,11 @@ export async function POST({ request }) {
 
           // @ts-ignore
           responseContent = gptResponse.choices[0].message.content.trim();
-          predicted_value = parseResponse(responseContent);
+          // predicted_value = parseResponse(responseContent);
+          const parsedResult = parseResponse(responseContent);
+          predicted_value = parsedResult.prediction;
+          probability = parsedResult.probability;
+          confidence = parsedResult.confidence;
           retries = 0;
 
           // Check if choices array is present
@@ -454,13 +359,38 @@ export async function POST({ request }) {
       articleId = articleResult.insertId;
 
       // 4. Insert into Annotation
+      // const booleanPredictedValue = predicted_value === "true" ? 1 : 0;
+      // await connection.query(
+      //   `INSERT INTO Annotation (true_value, predicted_value, article_id, prompt_id) VALUES (?, ?, ?, ?)`,
+      //   [true_value, booleanPredictedValue, articleId, newPromptId]
+      // );
+      // console.log(
+      //   "INSERTED:" + true_value + booleanPredictedValue + predicted_value
+      // );
+
       const booleanPredictedValue = predicted_value === "true" ? 1 : 0;
+
       await connection.query(
-        `INSERT INTO Annotation (true_value, predicted_value, article_id, prompt_id) VALUES (?, ?, ?, ?)`,
-        [true_value, booleanPredictedValue, articleId, newPromptId]
+        `INSERT INTO Annotation (true_value, predicted_value, probability, confidence, article_id, prompt_id) VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          true_value,
+          booleanPredictedValue,
+          probability,
+          confidence,
+          articleId,
+          newPromptId,
+        ]
       );
       console.log(
-        "INSERTED:" + true_value + booleanPredictedValue + predicted_value
+        "INSERTED:true" +
+          true_value +
+          "pred: " +
+          booleanPredictedValue +
+          predicted_value +
+          "prob: " +
+          probability +
+          "conf: " +
+          confidence
       );
     }
 

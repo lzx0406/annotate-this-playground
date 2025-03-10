@@ -18,6 +18,8 @@ export async function GET({ url }) {
         Article.text AS text, 
         Annotation.true_value, 
         Annotation.predicted_value,
+        Annotation.probability,
+        Annotation.confidence,
         Annotation.annotation_id 
        FROM Article 
        JOIN Annotation ON Article.article_id = Annotation.article_id 

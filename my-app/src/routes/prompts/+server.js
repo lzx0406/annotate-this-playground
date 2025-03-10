@@ -64,6 +64,19 @@ export async function GET({ url }) {
           console.error("Error parsing metrics JSON:");
         }
       }
+      const [annotations] = await db.query(
+        "SELECT predicted_value FROM Annotation WHERE prompt_id = ?",
+        [prompt.prompt_id]
+      );
+
+      const { yesCount, noCount, yesPercentage, noPercentage } =
+        calculateYesNoCounts(annotations);
+
+      // Attach yes/no counts to the prompt response (without modifying the database)
+      prompt.yesCount = yesCount;
+      prompt.noCount = noCount;
+      prompt.yesPercentage = yesPercentage;
+      prompt.noPercentage = noPercentage;
     }
 
     return new Response(JSON.stringify(prompts), { status: 200 });
@@ -120,6 +133,28 @@ function calculateMetrics(annotations) {
   console.log("Calculated Metrics:", roundedMetrics);
 
   return roundedMetrics;
+}
+
+/**
+ * @param {import("mysql2").QueryResult} annotations
+ */
+function calculateYesNoCounts(annotations) {
+  let yesCount = 0;
+  let noCount = 0;
+
+  for (const { predicted_value } of annotations) {
+    if (predicted_value === 1) {
+      yesCount++;
+    } else if (predicted_value === 0) {
+      noCount++;
+    }
+  }
+
+  const total = yesCount + noCount;
+  const yesPercentage = total ? ((yesCount / total) * 100).toFixed(2) : "0.00";
+  const noPercentage = total ? ((noCount / total) * 100).toFixed(2) : "0.00";
+
+  return { yesCount, noCount, yesPercentage, noPercentage };
 }
 
 // @ts-ignore

@@ -50,6 +50,58 @@
   let randomSeed = 2025;
   let showBucket;
 
+  let filteredByBucket = [];
+
+  // Map bucket name to exclusive probability ranges
+  const bucketRanges = {
+    "Very Likely": [0.8, 1.0], // 0.8 ≤ P ≤ 1.0
+    "Somewhat Likely": [0.6, 0.8], // 0.6 ≤ P < 0.8
+    "Even Chance": [0.4, 0.6], // 0.4 ≤ P < 0.6
+    "Somewhat Unlikely": [0.2, 0.4], // 0.2 ≤ P < 0.4
+    "Very Unlikely": [0.0, 0.2], // 0.0 ≤ P < 0.2
+  };
+
+  // Ensure `selectedBucket` starts with a valid value
+  let selectedBucket = "Very Likely";
+
+  // 1️⃣ Function: Filter by Bucket
+  function filterByBucket(bucketName) {
+    selectedBucket = bucketName; // Update the bucket state
+
+    const [minProb, maxProb] = bucketRanges[bucketName] || [0, 1];
+
+    filteredByBucket = exampleData.filter(
+      (row) =>
+        row.probability !== undefined &&
+        row.probability >= minProb &&
+        row.probability < maxProb // Exclusive max
+    );
+
+    console.log(
+      `Filtered by bucket: ${selectedBucket}, found ${filteredByBucket.length} results`
+    );
+
+    filterBySampleSize(); // Apply sample size filtering after bucket filtering
+  }
+
+  // 2️⃣ Function: Apply Sample Size Filtering
+  function filterBySampleSize() {
+    if (!filteredByBucket || filteredByBucket.length === 0) {
+      filteredData = [];
+      return;
+    }
+
+    const rng = seedrandom(randomSeed);
+    filteredData = filteredByBucket
+      .sort(() => rng() - 0.5) // Shuffle
+      .slice(0, sampleSize); // Limit to sample size
+
+    console.log(
+      `Applied sample size filter: showing ${filteredData.length} results`
+    );
+  }
+
+  // 3️⃣ Run filters on page load after fetching data
   onMount(async () => {
     console.log("MOUNTINGGGGGGG");
     console.log("Current prompts:", $prompts);
@@ -62,11 +114,11 @@
     }
 
     try {
-      // Fetch data from the backend
+      // Fetch data from backend
       const response = await fetch(`/api/getExamples?prompt_id=${id}`);
       if (response.ok) {
         exampleData = await response.json();
-        filteredData = [...exampleData];
+        filterByBucket(selectedBucket); // Ensure filtering applies on first load
       } else {
         console.error("Failed to fetch examples");
       }
@@ -96,25 +148,24 @@
     return [textP, timeP];
   }
 
-  function filterData() {
-    if (!exampleData || exampleData.length === 0) {
-      filteredData = [];
-      return;
-    }
+  // function filterData() {
+  //   if (!exampleData || exampleData.length === 0) {
+  //     filteredData = [];
+  //     return;
+  //   }
 
-    const rng = seedrandom(randomSeed);
-    const shuffled = [...exampleData];
+  //   const rng = seedrandom(randomSeed);
+  //   const shuffled = [...exampleData];
 
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(rng() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
+  //   for (let i = shuffled.length - 1; i > 0; i--) {
+  //     const j = Math.floor(rng() * (i + 1));
+  //     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  //   }
 
-    filteredData = shuffled.slice(0, sampleSize);
-  }
+  //   filteredData = shuffled.slice(0, sampleSize);
+  // }
 
   // bucket scripts
-  let selectedBucket = "Very Likely";
 
   const buckets = [
     { name: "Very Likely", color: "#5EE85C" },
@@ -122,7 +173,7 @@
     { name: "Even Chance", color: "#E8E35C" },
     { name: "Somewhat Unlikely", color: "#E88D5C" },
     { name: "Very Unlikely", color: "#E85C5C" },
-    { name: "Self-defined Bucket", color: "#60ACF2" },
+    // { name: "Self-defined Bucket", color: "#60ACF2" },
   ];
 
   let bucketStats = {
@@ -131,13 +182,34 @@
     "Even Chance": { count: 90, percentage: 18 },
     "Somewhat Unlikely": { count: 110, percentage: 22 },
     "Very Unlikely": { count: 110, percentage: 22 },
-    "Self-defined Bucket": { count: 120, percentage: 24 },
+    // "Self-defined Bucket": { count: 120, percentage: 24 },
   };
 
-  function filterByBucket(bucketName) {
-    selectedBucket = bucketName;
-    // Apply your filtering logic here based on the bucket
-    console.log(`Filtering by: ${bucketName}`);
+  function getConfidenceLevel(probability) {
+    if (probability < 0.2) {
+      return { label: "Very Unlikely", color: "#E85C5C" }; // Red
+    } else if (probability < 0.4) {
+      return { label: "Somewhat Unlikely", color: "#E88D5C" }; // Orange
+    } else if (probability < 0.6) {
+      return { label: "Even Chance", color: "#E8E35C" }; // Yellow
+    } else if (probability < 0.8) {
+      return { label: "Somewhat Likely", color: "#BEE85C" }; // Light Green
+    } else {
+      return { label: "Very Likely", color: "#5EE85C" }; // Green
+    }
+  }
+
+  // function filterByBucket(bucketName) {
+  //   selectedBucket = bucketName;
+  //   // Apply your filtering logic here based on the bucket
+  //   console.log(`Filtering by: ${bucketName}`);
+  // }
+
+  // For page options
+  let selectedOption = writable(null);
+
+  function setOption(option) {
+    selectedOption.update((current) => (current === option ? null : option));
   }
 </script>
 
@@ -146,7 +218,7 @@
     <!-- Logo -->
     <div class="nav-left">
       <img src="/imgs/logo.png" alt="AnnotateThis" class="logo" />
-      <h1 style="vertical-align: middle; margin:3% 0% 0% 8%;">
+      <h1 style="white-space: nowrap; margin:3% 0% 0% 8%;">
         Concept Exploration
       </h1>
     </div>
@@ -159,6 +231,23 @@
   </nav>
 </section>
 
+<div class="button-group">
+  <button class="button-group-c" on:click={() => setOption("certainty")}
+    >I want to see how certain the AI is about these labels</button
+  >
+  <button class="button-group-c" on:click={() => setOption("modelConsistency")}
+    >I want to see how if the AI makes the same predictions if I change some of
+    the model settings</button
+  >
+  <button class="button-group-c" on:click={() => setOption("promptConsistency")}
+    >I want to see if the AI makes the same predictions if I make small changes
+    to the prompt</button
+  >
+  <button class="button-group-c" on:click={() => setOption("explanation")}
+    >I want to see the AIs explanations</button
+  >
+</div>
+
 <section>
   <div class="top">
     <!-- <a href={`../prompts`}><Fa icon={faHouse} /> Back to My Prompts </a>
@@ -169,7 +258,7 @@
   </div>
 </section>
 
-<section
+<!-- <section
   style="
     margin: 20px 5%;
     padding: 20px;
@@ -209,37 +298,18 @@
       <p>Number of instances: {bucketStats[selectedBucket].count}</p>
       <p>Percentage: {bucketStats[selectedBucket].percentage}%</p>
     </div>
-    <!-- <button
-      on:click={() => filterByBucket(selectedBucket)}
-      style="
-        padding: 10px 20px;
-        background-color: #5facf2;
-        color: white;
-        border: none;
-        border-radius: 6px;
-        font-weight: bold;
-        cursor: pointer;
-      "
-    >
-      Show examples in this bucket
-    </button> -->
   </div>
-</section>
+</section> -->
 
 <div style="display: flex; align-items: center; gap: 8px; margin: 0 5% 0 5%;">
   <label for="sampleSize" style="font-weight: bold;">Show</label>
   <select
     id="sampleSize"
     bind:value={sampleSize}
-    on:change={filterData}
-    style="
-      padding: 5px 10px;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      font-size: 14px;
-    "
+    on:change={filterBySampleSize}
+    style="padding: 5px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px;"
   >
-    <option value="10" selected="selected">10</option>
+    <option value="10">10</option>
     <option value="25">25</option>
     <option value="50">50</option>
     <option value="100">100</option>
@@ -247,20 +317,13 @@
   <span style="font-weight: bold;">annotation examples from bucket</span>
   <select
     id="showBucket"
-    bind:value={showBucket}
-    on:change={filterByBucket}
-    style="
-      padding: 5px 10px;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      font-size: 14px;
-    "
+    bind:value={selectedBucket}
+    on:change={() => filterByBucket(selectedBucket)}
+    style="padding: 5px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px;"
   >
-    <option value="very likely">Very Likely</option>
-    <option value="somewhat likely">Somewhat Likely</option>
-    <option value="even chance">Even Chance</option>
-    <option value="somewhat unlikely">Somewhat Unlikely</option>
-    <option value="very unlikely">Very Unlikely</option>
+    {#each buckets as bucket}
+      <option value={bucket.name}>{bucket.name}</option>
+    {/each}
   </select>
 </div>
 
@@ -277,9 +340,20 @@
           <tr>
             <th style="width: 5%;"></th>
             <th style="width: 10%;">Article URL</th>
-            <th style="width: 70%;">Article Text</th>
+            <th style="width: 65%;">Article Text</th>
             <th>Predicted Value</th>
-            <th>Bucket</th>
+            {#if $selectedOption === "certainty"}
+              <th>Certainty</th>
+            {/if}
+            {#if $selectedOption === "modelConsistency"}
+              <th>Model Consistency</th>
+            {/if}
+            {#if $selectedOption === "promptConsistency"}
+              <th>Prompt Consistency</th>
+            {/if}
+            {#if $selectedOption === "explanation"}
+              <th>Explanation</th>
+            {/if}
           </tr>
         </thead>
         <tbody>
@@ -289,7 +363,6 @@
                 >{exampleData.findIndex((originalRow) => originalRow === row) +
                   1}</td
               >
-              <!-- Dynamically calculate the original index -->
               <td>
                 <a
                   href={row.article_url}
@@ -308,7 +381,33 @@
               </td>
               <td>{row.text}</td>
               <td>{row.predicted_value ? "Yes" : "No"}</td>
-              <td>Very Likely</td>
+              {#if $selectedOption === "certainty"}
+                {#if row.probability !== undefined}
+                  <td style="text-align: center;">
+                    <span
+                      style="
+                    background-color: {getConfidenceLevel(row.probability)
+                        .color}; 
+                    color: black; 
+                    font-weight: bold; 
+                    padding: 4px 10px; 
+                    border-radius: 10px; 
+                    display: inline-block;"
+                    >
+                      {getConfidenceLevel(row.probability).label} ({row.probability})
+                    </span>
+                  </td>
+                {/if}
+              {/if}
+              {#if $selectedOption === "modelConsistency"}
+                <td>{row.model_consistency}</td>
+              {/if}
+              {#if $selectedOption === "promptConsistency"}
+                <td>{row.prompt_consistency}</td>
+              {/if}
+              {#if $selectedOption === "explanation"}
+                <td>{row.explanation}</td>
+              {/if}
             </tr>
           {/each}
         </tbody>
@@ -471,5 +570,32 @@
   a:active {
     text-decoration: none;
     color: #5facf2;
+  }
+
+  .button-group {
+    display: flex;
+    flex-direction: row;
+    gap: 20px; /* Space between buttons */
+    margin: 2% 5% 2% 5%;
+  }
+
+  /* General button style */
+  .button-group-c {
+    display: block;
+    text-decoration: none;
+    font-size: 18px;
+    font-weight: bold;
+    padding: 15px 30px;
+    border-radius: 10px; /* Fully rounded */
+    text-align: center;
+    transition: all 0.3s ease;
+    border: 2px solid #7eb7f5;
+    color: #3498db;
+    background-color: transparent;
+  }
+
+  .button-group-c:hover {
+    background-color: #7eb7f5;
+    color: white;
   }
 </style>

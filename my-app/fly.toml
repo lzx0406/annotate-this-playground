@@ -1,9 +1,9 @@
-# fly.toml app configuration file generated for my-app-wandering-rain-1259 on 2025-01-17T12:59:45-05:00
+# fly.toml app configuration file generated for my-app-bold-field-3884 on 2025-03-10T05:06:41-04:00
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'my-app-wandering-rain-1259'
+app = 'my-app-bold-field-3884'
 primary_region = 'ord'
 
 [build]
@@ -15,9 +15,6 @@ primary_region = 'ord'
   auto_start_machines = true
   min_machines_running = 0
   processes = ['app']
-
-[env]
-  BODY_SIZE_LIMIT = 5500000
 
 [[vm]]
   memory = '2gb'

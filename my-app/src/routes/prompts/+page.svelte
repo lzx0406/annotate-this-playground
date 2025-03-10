@@ -461,14 +461,22 @@
           <h3>Prompt {index + 1}:</h3>
           <span>{formatTimeSubmitted(prompt.time_submitted)}</span>
           <div class="prediction-row">
-            <span
-              >Predicted <span style="color:#66bb6a">Yes</span>: 35%,
-              <span style="color:#ef5350">No</span>: 65%</span
-            >
-            <div class="prediction-bar">
-              <div class="yes-bar" style="width: 35%;"></div>
-              <div class="no-bar" style="width: 65%;"></div>
-            </div>
+            {#if prompt.yesCount !== undefined && prompt.noCount !== undefined}
+              <span>
+                Predicted <span style="color:#66bb6a">Yes</span>: {prompt.yesPercentage}%,
+                <span style="color:#ef5350">No</span>: {prompt.noPercentage}%
+              </span>
+              <div class="prediction-bar">
+                <div
+                  class="yes-bar"
+                  style="width: {prompt.yesPercentage}%;"
+                ></div>
+                <div
+                  class="no-bar"
+                  style="width: {prompt.noPercentage}%;"
+                ></div>
+              </div>
+            {/if}
           </div>
           <div class="prompt-text-wrapper">
             <p class="prompt-text">{prompt.text}</p>
@@ -611,9 +619,9 @@
       <div class="popup-content">
         <h3>Annotation Process</h3>
         <p>
-          The annotation process takes approximately more than 30 minutes to
-          complete. Please do not refresh page while annotation is in progress.
-          Click "Proceed" to start.
+          The annotation process takes approximately 5 minutes to complete.
+          Please do not refresh page while annotation is in progress. Click
+          "Proceed" to start.
         </p>
         <button on:click={sendPrompt(newAddingPrompt.text)}>Proceed</button>
         <button on:click={() => (showPopup = false)}>Cancel</button>
