@@ -17,7 +17,7 @@ import mysql from "mysql2/promise";
 export const db = mysql.createPool({
   host: "aiexpertsdb.ch0mqku8apof.us-east-2.rds.amazonaws.com",
   user: "admin",
-  password: "m8hfn.p1QHP9Zv$D?ypZf(ZTDq>A",
+  password: "",
   // password: secret,
   database: "aiexpertsnews",
   waitForConnections: true,
