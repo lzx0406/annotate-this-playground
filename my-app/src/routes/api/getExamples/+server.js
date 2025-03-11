@@ -20,7 +20,8 @@ export async function GET({ url }) {
         Annotation.predicted_value,
         Annotation.probability,
         Annotation.confidence,
-        Annotation.annotation_id 
+        Annotation.annotation_id,
+        Annotation.perturbation_index 
        FROM Article 
        JOIN Annotation ON Article.article_id = Annotation.article_id 
        WHERE Annotation.prompt_id = ?`,

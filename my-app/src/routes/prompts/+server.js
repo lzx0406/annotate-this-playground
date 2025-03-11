@@ -14,11 +14,11 @@ export async function GET({ url }) {
   try {
     // Query to get prompts for the given user ID
     const [prompts] = await db.query(
-      "SELECT prompt_id, text, prompt_type, time_submitted, metrics FROM Prompt WHERE writer_id = ?",
+      "SELECT prompt_id, text, prompt_type, time_submitted, metrics, perturbation_index FROM Prompt WHERE writer_id = ?",
       [userId]
     );
 
-    console.log("Fetched prompts:", prompts);
+    // console.log("Fetched prompts:", prompts);
 
     // Process each prompt
     // @ts-ignore
@@ -53,15 +53,15 @@ export async function GET({ url }) {
           );
         }
       } else {
-        console.log("Metrics already exist for prompt ID:", prompt.prompt_id);
+        // console.log("Metrics already exist for prompt ID:", prompt.prompt_id);
 
         // Parse existing metrics if they are stored as JSON
         try {
           prompt.metrics = JSON.parse(prompt.metrics);
-          console.log("Parsed existing metrics:", prompt.metrics);
+          // console.log("Parsed existing metrics:", prompt.metrics);
         } catch (error) {
           // console.error("Error parsing metrics JSON:", error);
-          console.error("Error parsing metrics JSON:");
+          // console.error("Error parsing metrics JSON:");
         }
       }
       const [annotations] = await db.query(

@@ -37,7 +37,7 @@ export async function GET({ url }) {
     );
 
     // @ts-ignore
-    console.log("Sample of admin data:", rows.slice(0, 5));
+    // console.log("Sample of admin data:", rows.slice(0, 5));
     return new Response(JSON.stringify(rows), { status: 200 });
   } catch (error) {
     console.error("Error fetching examples:", error);

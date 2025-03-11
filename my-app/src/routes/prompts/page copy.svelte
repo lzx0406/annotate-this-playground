@@ -39,46 +39,197 @@
   let showPopup = false;
   let newAddingPrompt;
 
+  // onMount(async () => {
+  //   console.log("onMount triggered!");
+
+  //   console.log("User ID and name:", get(userId), get(userName));
+  //   if (!get(userId) || !get(userName)) {
+  //     console.warn("User not found, logging out...");
+  //     logout();
+  //     return; // Ensure execution stops here if logout happens
+  //   }
+
+  //   console.log("Calling fetchPastPrompts...");
+  //   fetchPastPrompts(); // Runs first
+
+  //   // Handle current prompts
+  //   const currentPrompt = get(pendingPrompt);
+  //   const currentProgress = get(latestProgress);
+  //   console.log("AFTER REFRESH got prompt:", currentPrompt);
+  //   console.log("AFTER REFRESH got latest:", currentProgress);
+
+  //   if (
+  //     currentPrompt &&
+  //     currentProgress !== "annotation completed" &&
+  //     currentProgress !== "error sending data to OpenAI" &&
+  //     currentProgress !== "waiting for annotation task"
+  //   ) {
+  //     waitingForAnnotation.set(true);
+  //     console.log("AFTER REFRESH got YES still annotating");
+  //   } else {
+  //     waitingForAnnotation.set(false);
+  //     console.log("AFTER REFRESH NOT still annotating");
+  //   }
+
+  //   // Timestamp logic
+  //   const storedTimestamp = localStorage.getItem("annotationStartTimestamp");
+  //   if (storedTimestamp && $waitingForAnnotation) {
+  //     manageTimer();
+  //   }
+
+  //   // Fetch admin data
+  //   console.log("Fetching admin data...");
+  //   admin_p_id = 1;
+  //   try {
+  //     const response = await fetch(`/api/getAdminData?prompt_id=${admin_p_id}`);
+  //     if (response.ok) {
+  //       adminData = await response.json();
+  //       console.log(`Found ${adminData.length} rows in admin data.`);
+  //     } else {
+  //       console.error("Failed to fetch admin data");
+  //     }
+  //   } catch (error) {
+  //     console.error("Error fetching admin data:", error);
+  //   }
+
+  //   // Poll OpenAI status every 10 seconds
+  //   console.log("Setting up polling for OpenAI progress...");
+  //   const interval = setInterval(async () => {
+  //     try {
+  //       const response = await fetch("/api/toOpenAI");
+  //       if (response.ok) {
+  //         const { progress } = await response.json();
+  //         latestProgress.set(progress);
+  //         console.log("UPDATED LATEST PROGRESS to:", get(latestProgress));
+  //         console.log("waiting for annotation??", get(waitingForAnnotation));
+  //         console.log("current pending prompt:", get(pendingPrompt));
+  //       } else {
+  //         console.error("Failed to fetch progress");
+  //       }
+  //     } catch (error) {
+  //       console.error("Error fetching progress:", error);
+  //     }
+  //   }, 10000);
+
+  //   return () => clearInterval(interval); // Cleanup on unmount
+  // });
+
   onMount(() => {
-    if (!get(userId) || !get(userName)) {
-      logout();
+    try {
+      console.log("✅ onMount triggered! This should always print.");
+
+      // Debugging userId and userName before accessing stores
+      console.log("User ID before store access:", userId);
+      console.log("User Name before store access:", userName);
+
+      const userIdValue = get(userId);
+      const userNameValue = get(userName);
+
+      console.log("User ID after store access:", userIdValue);
+      console.log("User Name after store access:", userNameValue);
+
+      if (!userIdValue || !userNameValue) {
+        console.warn("🚨 User is missing, calling logout...");
+        logout();
+        return;
+      }
+
+      console.log("✅ Calling fetchPastPrompts...");
+      fetchPastPrompts();
+    } catch (error) {
+      console.error("🚨 Error inside onMount():", error);
     }
   });
 
-  // Fetch past prompts for the logged-in user on component mount
-  onMount(() => {
-    fetchPastPrompts();
-  });
+  console.log("line aft onMount");
 
-  onMount(() => {
-    const currentPrompt = get(pendingPrompt);
-    const currentProgress = get(latestProgress);
-    console.log("AFTER REFRESH got prompt" + currentPrompt);
-    console.log("AFTER REFRESH got latest" + currentProgress);
+  // onMount(() => {
+  //   console.log("user id and name" + userId + userName);
+  //   if (!get(userId) || !get(userName)) {
+  //     logout();
+  //   }
 
-    if (
-      currentPrompt &&
-      currentProgress !== "annotation completed" &&
-      currentProgress !== "error sending data to OpenAI" &&
-      currentProgress !== "waiting for annotation task"
-    ) {
-      waitingForAnnotation.set(true);
-      console.log("AFTER REFRESH got YES still annotating");
-    } else {
-      waitingForAnnotation.set(false);
-      console.log("AFTER REFRESH NOT still annotating");
-    }
-  });
+  //   // fetch pp
+  //   console.log("onMount triggered, calling fetchPastPrompts...");
+  //   fetchPastPrompts();
 
-  onMount(() => {
-    const storedTimestamp = localStorage.getItem("annotationStartTimestamp");
-    if (storedTimestamp && $waitingForAnnotation) {
-      manageTimer();
-    }
-  });
+  //   // current prompts
+  //   const currentPrompt = get(pendingPrompt);
+  //   const currentProgress = get(latestProgress);
+  //   console.log("AFTER REFRESH got prompt" + currentPrompt);
+  //   console.log("AFTER REFRESH got latest" + currentProgress);
 
+  //   if (
+  //     currentPrompt &&
+  //     currentProgress !== "annotation completed" &&
+  //     currentProgress !== "error sending data to OpenAI" &&
+  //     currentProgress !== "waiting for annotation task"
+  //   ) {
+  //     waitingForAnnotation.set(true);
+  //     console.log("AFTER REFRESH got YES still annotating");
+  //   } else {
+  //     waitingForAnnotation.set(false);
+  //     console.log("AFTER REFRESH NOT still annotating");
+  //   }
+
+  //   // timestamp
+  //   const storedTimestamp = localStorage.getItem("annotationStartTimestamp");
+  //   if (storedTimestamp && $waitingForAnnotation) {
+  //     manageTimer();
+  //   }
+  // });
+
+  // //fetch admin data
+  // onMount(async () => {
+  //   // console.log("HEREEEEEE" + $selectedAnnotationType);
+  //   // if ($selectedAnnotationType === "call to action") {
+  //   //   admin_p_id = 4;
+  //   // } else if ($selectedAnnotationType === "concern wildlife") {
+  //   //   admin_p_id = 5;
+  //   // } else
+  //   admin_p_id = 1;
+  //   try {
+  //     // Fetch data from the backend
+  //     const response = await fetch(`/api/getAdminData?prompt_id=${admin_p_id}`);
+  //     if (response.ok) {
+  //       adminData = await response.json();
+  //       // console.log("Found admin data for type" + $selectedAnnotationType);
+  //       console.log(
+  //         `Found ${adminData.length} rows in admin data for type: ${$selectedAnnotationType}`
+  //       );
+  //     } else {
+  //       console.error("Failed to fetch admin data");
+  //     }
+  //   } catch (error) {
+  //     console.error("Error fetching admin data:", error);
+  //   }
+  // });
+
+  // onMount(() => {
+  //   const interval = setInterval(async () => {
+  //     try {
+  //       const response = await fetch("/api/toOpenAI");
+  //       if (response.ok) {
+  //         const { progress } = await response.json();
+  //         latestProgress.set(progress);
+  //         console.log("UPDATED LATEST PROGRESS to:", get(latestProgress));
+  //         console.log("waiting for annotation??", get(waitingForAnnotation));
+  //         console.log("current pending prompt:" + get(pendingPrompt));
+  //       } else {
+  //         console.error("Failed to fetch progress");
+  //       }
+  //     } catch (error) {
+  //       console.error("Error fetching progress:", error);
+  //     }
+  //   }, 10000); // Poll every 10 seconds
+
+  //   return () => clearInterval(interval); // Cleanup on component unmount
+  // });
+
+  // Backend function to handle fetching prompts with metrics
   async function fetchPastPrompts() {
     const userIdValue = get(userId); // Get the latest value of userId
+    console.log("FETCHING PAST PP");
 
     if (!userIdValue) {
       console.error("User ID is missing");
@@ -88,34 +239,35 @@
     try {
       // Fetch prompts for the user
       const response = await fetch(`/prompts?userId=${userIdValue}`);
+      console.log(response);
 
       if (response.ok) {
         const data = await response.json();
+        console.log("GOT DATAAAA" + data);
 
-        // Filter to only include prompts with perturbation_index = 0
         const filteredPrompts = data.filter(
           (prompt) => prompt.perturbation_index === 0
         );
 
+        prompts.set(filteredPrompts);
+
         // Process each prompt to ensure metrics are available
-        const updatedPrompts = filteredPrompts.map((prompt) => {
-          if (typeof prompt.metrics === "string") {
-            try {
-              prompt.metrics = JSON.parse(prompt.metrics);
-            } catch (error) {
-              console.error("Error parsing metrics JSON:", error);
-            }
-          }
-          return prompt;
-        });
+        // const updatedPrompts = data.map((prompt) => {
+        //   // Parse the metrics field if it is stored as JSON
+        //   if (typeof prompt.metrics === "string") {
+        //     try {
+        //       prompt.metrics = JSON.parse(prompt.metrics);
+        //     } catch (error) {
+        //       console.error("Error parsing metrics JSON:", error);
+        //     }
+        //   }
+        //   return prompt;
+        // });
 
-        // Update the Svelte store with the filtered data
-        prompts.set(updatedPrompts);
+        // Update the prompts store with the updated data containing metrics
+        // prompts.set(updatedPrompts);
 
-        console.log(
-          "Updated prompts with metrics (filtered perturbation = 0):",
-          updatedPrompts
-        );
+        // console.log("Updated prompts with metrics:", updatedPrompts);
       } else {
         console.error("Failed to fetch prompts");
       }
@@ -123,32 +275,6 @@
       console.error("Error fetching prompts:", error);
     }
   }
-
-  //fetch admin data
-  onMount(async () => {
-    console.log("HEREEEEEE" + $selectedAnnotationType);
-    // if ($selectedAnnotationType === "call to action") {
-    //   admin_p_id = 4;
-    // } else if ($selectedAnnotationType === "concern wildlife") {
-    //   admin_p_id = 5;
-    // } else
-    admin_p_id = 1;
-    try {
-      // Fetch data from the backend
-      const response = await fetch(`/api/getAdminData?prompt_id=${admin_p_id}`);
-      if (response.ok) {
-        adminData = await response.json();
-        // console.log("Found admin data for type" + $selectedAnnotationType);
-        console.log(
-          `Found ${adminData.length} rows in admin data for type: ${$selectedAnnotationType}`
-        );
-      } else {
-        console.error("Failed to fetch admin data");
-      }
-    } catch (error) {
-      console.error("Error fetching admin data:", error);
-    }
-  });
 
   // let system_prompt = `
   //   You are an assistant specializing in news article text content analysis and annotation.
@@ -269,27 +395,6 @@
       latestProgress.set("error sending data to OpenAI");
     }
   }
-
-  onMount(() => {
-    const interval = setInterval(async () => {
-      try {
-        const response = await fetch("/api/toOpenAI");
-        if (response.ok) {
-          const { progress } = await response.json();
-          latestProgress.set(progress);
-          console.log("UPDATED LATEST PROGRESS to:", get(latestProgress));
-          console.log("waiting for annotation??", get(waitingForAnnotation));
-          console.log("current pending prompt:" + get(pendingPrompt));
-        } else {
-          console.error("Failed to fetch progress");
-        }
-      } catch (error) {
-        console.error("Error fetching progress:", error);
-      }
-    }, 10000); // Poll every 10 seconds
-
-    return () => clearInterval(interval); // Cleanup on component unmount
-  });
 
   $: {
     if ($latestProgress === "annotation completed") {

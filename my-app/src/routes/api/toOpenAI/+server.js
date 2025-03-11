@@ -257,141 +257,152 @@ export async function POST({ request }) {
 
     await connection.beginTransaction();
 
-    const existingModelName = await getFineTunedModelName(
-      // @ts-ignore
-      connection,
-      writer_id
-    );
+    // const existingModelName = await getFineTunedModelName(
+    //   // @ts-ignore
+    //   connection,
+    //   writer_id
+    // );
 
     latestProgress.set("annotating");
-    console.log("QUESTION THIS TIME:" + question);
-    // 1. Insert into Prompt (only once for the entire batch)
-    const [promptResult] = await connection.query(
-      `INSERT INTO Prompt (text, prompt_type, time_submitted, writer_id) VALUES (?, ?, NOW(), ?)`,
-      [question, prompt_type, writer_id]
-    );
-    // @ts-ignore
-    const newPromptId = promptResult.insertId;
-    console.log("New Prompt ID:", newPromptId);
 
-    const videoMap = new Map();
+    for (
+      let perturbation_index = 0;
+      perturbation_index < 5;
+      perturbation_index++
+    ) {
+      console.log(`Running perturbation index ${perturbation_index}`);
 
-    for (const item of testSet) {
-      const {
-        prompt_type,
-        article_url,
-        text,
-        true_value,
-        original_pred,
-        original_annotation_id,
-      } = item;
-
-      let responseContent;
-      let predicted_value;
-      let probability;
-      let confidence;
-
-      // Construct the base prompt with video and comment information
-      const concat_sys =
-        system_prompt +
-        `\nThe question is: You are an assistant specializing in news article text content analysis and annotation.
-    You will be given text in news articles.
-    Your task is to determine whether an article contains "hard news."` +
-        question;
-      // const base_prompt = `Prompt for annotation: ${question}\nArticle text: ${text}\n`;
-      const base_prompt = `Article text: ${text}\n`;
-      const messages = [
-        { role: "system", content: concat_sys },
-        { role: "user", content: base_prompt },
-      ];
-
-      // Call OpenAI API and retry if needed
-      let retries = 3;
-      while (retries > 0) {
-        try {
-          // @ts-ignore
-          const gptResponse = await openai.chat.completions.create({
-            model: "gpt-4o-mini-2024-07-18",
-            // @ts-ignore
-            messages: messages,
-            temperature: 0,
-          });
-
-          // @ts-ignore
-          responseContent = gptResponse.choices[0].message.content.trim();
-          // predicted_value = parseResponse(responseContent);
-          const parsedResult = parseResponse(responseContent);
-          predicted_value = parsedResult.prediction;
-          probability = parsedResult.probability;
-          confidence = parsedResult.confidence;
-          retries = 0;
-
-          // Check if choices array is present
-          if (
-            !gptResponse.choices ||
-            !gptResponse.choices[0] ||
-            !gptResponse.choices[0].message
-          ) {
-            console.error(
-              "Unexpected OpenAI API response format:",
-              gptResponse
-            );
-            throw new Error(
-              "OpenAI API response did not contain expected 'choices' data."
-            );
-          }
-        } catch (error) {
-          console.error("Error calling OpenAI API:", error);
-          if (--retries === 0) throw error;
-          await new Promise((resolve) => setTimeout(resolve, 150000)); // Retry after delay
-        }
-      }
-
-      const articleKey = `${article_url}_${newPromptId}`;
-      let articleId;
-      // 2. Insert into Article
-
-      const [articleResult] = await connection.query(
-        `INSERT INTO Article (url, text, prompt_id) VALUES (?, ?, ?)`,
-        [article_url, text, newPromptId]
+      console.log("QUESTION THIS TIME:" + question);
+      // Insert into Prompt for each run
+      const [promptResult] = await connection.query(
+        `INSERT INTO Prompt (text, prompt_type, time_submitted, writer_id, perturbation_index) VALUES (?, ?, NOW(), ?, ?)`,
+        [question, prompt_type, writer_id, perturbation_index]
       );
       // @ts-ignore
-      articleId = articleResult.insertId;
+      const newPromptId = promptResult.insertId;
+      console.log("New Prompt ID:", newPromptId);
 
-      // 4. Insert into Annotation
-      // const booleanPredictedValue = predicted_value === "true" ? 1 : 0;
-      // await connection.query(
-      //   `INSERT INTO Annotation (true_value, predicted_value, article_id, prompt_id) VALUES (?, ?, ?, ?)`,
-      //   [true_value, booleanPredictedValue, articleId, newPromptId]
-      // );
-      // console.log(
-      //   "INSERTED:" + true_value + booleanPredictedValue + predicted_value
-      // );
+      // const videoMap = new Map();
 
-      const booleanPredictedValue = predicted_value === "true" ? 1 : 0;
-
-      await connection.query(
-        `INSERT INTO Annotation (true_value, predicted_value, probability, confidence, article_id, prompt_id) VALUES (?, ?, ?, ?, ?, ?)`,
-        [
+      for (const item of testSet) {
+        const {
+          prompt_type,
+          article_url,
+          text,
           true_value,
-          booleanPredictedValue,
-          probability,
-          confidence,
-          articleId,
-          newPromptId,
-        ]
-      );
-      console.log(
-        "INSERTED:true" +
-          true_value +
-          "pred: " +
-          booleanPredictedValue +
-          predicted_value +
-          "prob: " +
-          probability +
-          "conf: " +
-          confidence
-      );
+          original_pred,
+          original_annotation_id,
+        } = item;
+
+        let responseContent;
+        let predicted_value;
+        let probability;
+        let confidence;
+
+        // Construct the base prompt with video and comment information
+        const concat_sys =
+          system_prompt +
+          `\nThe question is: You are an assistant specializing in news article text content analysis and annotation.
+    You will be given text in news articles.
+    Your task is to determine whether an article contains "hard news."` +
+          question;
+        // const base_prompt = `Prompt for annotation: ${question}\nArticle text: ${text}\n`;
+        const base_prompt = `Article text: ${text}\n`;
+        const messages = [
+          { role: "system", content: concat_sys },
+          { role: "user", content: base_prompt },
+        ];
+
+        // Call OpenAI API and retry if needed
+        let retries = 3;
+        while (retries > 0) {
+          try {
+            // @ts-ignore
+            const gptResponse = await openai.chat.completions.create({
+              model: "gpt-4o-mini-2024-07-18",
+              // @ts-ignore
+              messages: messages,
+              temperature: 0.7, //Set temp to 0.7
+            });
+
+            // @ts-ignore
+            responseContent = gptResponse.choices[0].message.content.trim();
+            // predicted_value = parseResponse(responseContent);
+            const parsedResult = parseResponse(responseContent);
+            predicted_value = parsedResult.prediction;
+            probability = parsedResult.probability;
+            confidence = parsedResult.confidence;
+            retries = 0;
+
+            // Check if choices array is present
+            if (
+              !gptResponse.choices ||
+              !gptResponse.choices[0] ||
+              !gptResponse.choices[0].message
+            ) {
+              console.error(
+                "Unexpected OpenAI API response format:",
+                gptResponse
+              );
+              throw new Error(
+                "OpenAI API response did not contain expected 'choices' data."
+              );
+            }
+          } catch (error) {
+            console.error("Error calling OpenAI API:", error);
+            if (--retries === 0) throw error;
+            await new Promise((resolve) => setTimeout(resolve, 150000)); // Retry after delay
+          }
+        }
+
+        const articleKey = `${article_url}_${newPromptId}`;
+        let articleId;
+        // Insert into Article
+        const [articleResult] = await connection.query(
+          `INSERT INTO Article (url, text, prompt_id) VALUES (?, ?, ?)`,
+          [article_url, text, newPromptId]
+        );
+        // @ts-ignore
+        articleId = articleResult.insertId;
+
+        // 4. Insert into Annotation
+        // const booleanPredictedValue = predicted_value === "true" ? 1 : 0;
+        // await connection.query(
+        //   `INSERT INTO Annotation (true_value, predicted_value, article_id, prompt_id) VALUES (?, ?, ?, ?)`,
+        //   [true_value, booleanPredictedValue, articleId, newPromptId]
+        // );
+        // console.log(
+        //   "INSERTED:" + true_value + booleanPredictedValue + predicted_value
+        // );
+
+        const booleanPredictedValue = predicted_value === "true" ? 1 : 0;
+
+        await connection.query(
+          `INSERT INTO Annotation (true_value, predicted_value, probability, confidence, article_id, prompt_id, perturbation_index) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [
+            true_value,
+            booleanPredictedValue,
+            probability,
+            confidence,
+            articleId,
+            newPromptId,
+            perturbation_index,
+          ]
+        );
+        console.log(
+          "INSERTED:true" +
+            true_value +
+            " pred: " +
+            booleanPredictedValue +
+            predicted_value +
+            " prob: " +
+            probability +
+            " conf: " +
+            confidence +
+            " perturb id: " +
+            perturbation_index
+        );
+      }
     }
 
     // Commit the transaction after successfully inserting all records
@@ -403,7 +414,7 @@ export async function POST({ request }) {
     return new Response(
       JSON.stringify({
         message: "Data processed and saved to database successfully",
-        prompt_id: newPromptId,
+        // prompt_id: newPromptId,
       }),
       { status: 200 }
     );

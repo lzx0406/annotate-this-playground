@@ -27,6 +27,7 @@
   } from "$lib/stores";
   let promptList = [];
   let exampleData = [];
+  // let exampleData = writable([]);
 
   // Subscribe to the store
   // $: prompts.subscribe((/** @type {any[]} */ value) => {
@@ -46,7 +47,7 @@
   let showWrongPredictions = false;
   let textP, timeP;
 
-  let sampleSize = 10;
+  let sampleSize = 0;
   let randomSeed = 2025;
   let showBucket;
 
@@ -64,7 +65,6 @@
   // Ensure `selectedBucket` starts with a valid value
   let selectedBucket = "Very Likely";
 
-  // 1️⃣ Function: Filter by Bucket
   function filterByBucket(bucketName) {
     selectedBucket = bucketName; // Update the bucket state
 
@@ -81,13 +81,17 @@
       `Filtered by bucket: ${selectedBucket}, found ${filteredByBucket.length} results`
     );
 
-    filterBySampleSize(); // Apply sample size filtering after bucket filtering
+    filterBySampleSize();
   }
 
-  // 2️⃣ Function: Apply Sample Size Filtering
   function filterBySampleSize() {
     if (!filteredByBucket || filteredByBucket.length === 0) {
       filteredData = [];
+      return;
+    }
+
+    if (sampleSize == 0) {
+      filteredData = filteredByBucket;
       return;
     }
 
@@ -101,7 +105,7 @@
     );
   }
 
-  // 3️⃣ Run filters on page load after fetching data
+  console.log("MOUNTINGGGGGGG0");
   onMount(async () => {
     console.log("MOUNTINGGGGGGG");
     console.log("Current prompts:", $prompts);
@@ -206,10 +210,22 @@
   // }
 
   // For page options
-  let selectedOption = writable(null);
+  // let selectedOption = writable(null);
 
-  function setOption(option) {
-    selectedOption.update((current) => (current === option ? null : option));
+  // function setOption(option) {
+  //   selectedOption.update((current) => (current === option ? null : option));
+  // }
+  // Track selected options using an object
+  let selectedOptions = {
+    certainty: false,
+    modelConsistency: false,
+    explanation: false,
+  };
+
+  // Toggle options when checkboxes change
+  function toggleOption(option) {
+    selectedOptions[option] = !selectedOptions[option];
+    console.log("Updated selected options:", selectedOptions);
   }
 </script>
 
@@ -231,21 +247,34 @@
   </nav>
 </section>
 
-<div class="button-group">
-  <button class="button-group-c" on:click={() => setOption("certainty")}
-    >I want to see how certain the AI is about these labels</button
-  >
-  <button class="button-group-c" on:click={() => setOption("modelConsistency")}
-    >I want to see how if the AI makes the same predictions if I change some of
-    the model settings</button
-  >
-  <button class="button-group-c" on:click={() => setOption("promptConsistency")}
-    >I want to see if the AI makes the same predictions if I make small changes
-    to the prompt</button
-  >
-  <button class="button-group-c" on:click={() => setOption("explanation")}
-    >I want to see the AIs explanations</button
-  >
+<div class="checkbox-group">
+  <label class="checkbox-group-c">
+    <input
+      type="checkbox"
+      on:change={() => toggleOption("certainty")}
+      bind:checked={selectedOptions.certainty}
+    />
+    I want to see how certain the AI is about these labels
+  </label>
+
+  <label class="checkbox-group-c">
+    <input
+      type="checkbox"
+      on:change={() => toggleOption("modelConsistency")}
+      bind:checked={selectedOptions.modelConsistency}
+    />
+    I want to see if the AI makes the same predictions if I change some of the model
+    settings
+  </label>
+
+  <label class="checkbox-group-c">
+    <input
+      type="checkbox"
+      on:change={() => toggleOption("explanation")}
+      bind:checked={selectedOptions.explanation}
+    />
+    I want to see the AI's explanations
+  </label>
 </div>
 
 <section>
@@ -258,49 +287,6 @@
   </div>
 </section>
 
-<!-- <section
-  style="
-    margin: 20px 5%;
-    padding: 20px;
-    background-color: #f9f9f9;
-    border-radius: 10px;
-  "
->
-  <div
-    style="display: flex; gap: 10px; margin-bottom: 20px; justify-content:space-between;"
-  >
-    {#each buckets as bucket}
-      <button
-        on:click={() => filterByBucket(bucket.name)}
-        style="
-          padding: 10px 50px;
-          border-radius: 8px;
-          border: none;
-          color:black;
-          background-color: {bucket.color};
-          font-weight: bold;
-          cursor: pointer;
-          opacity: {selectedBucket === bucket.name ? 1 : 0.7};
-          border-bottom: {selectedBucket === bucket.name
-          ? '3px solid #444'
-          : 'none'};
-        "
-      >
-        {bucket.name}
-      </button>
-    {/each}
-  </div>
-
-  <div
-    style="display: flex; justify-content: space-between; align-items: center;"
-  >
-    <div>
-      <p>Number of instances: {bucketStats[selectedBucket].count}</p>
-      <p>Percentage: {bucketStats[selectedBucket].percentage}%</p>
-    </div>
-  </div>
-</section> -->
-
 <div style="display: flex; align-items: center; gap: 8px; margin: 0 5% 0 5%;">
   <label for="sampleSize" style="font-weight: bold;">Show</label>
   <select
@@ -309,6 +295,7 @@
     on:change={filterBySampleSize}
     style="padding: 5px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px;"
   >
+    <option value="0">All</option>
     <option value="10">10</option>
     <option value="25">25</option>
     <option value="50">50</option>
@@ -339,20 +326,22 @@
         <thead>
           <tr>
             <th style="width: 5%;"></th>
-            <th style="width: 10%;">Article URL</th>
-            <th style="width: 65%;">Article Text</th>
-            <th>Predicted Value</th>
-            {#if $selectedOption === "certainty"}
-              <th>Certainty</th>
+            <th style="width: 10%; max-width: 100px;">Article URL</th>
+            <th style="width: 40%; white-space:normal; max-width: 500px;"
+              >Article Text</th
+            >
+            <th style="width: 8%;">Predicted Value</th>
+
+            {#if selectedOptions.certainty}
+              <th style="width: 5%; max-width: 100px">Certainty</th>
             {/if}
-            {#if $selectedOption === "modelConsistency"}
-              <th>Model Consistency</th>
+
+            {#if selectedOptions.modelConsistency}
+              <th style="width: 5%;max-width: 100px">Model Consistency</th>
             {/if}
-            {#if $selectedOption === "promptConsistency"}
-              <th>Prompt Consistency</th>
-            {/if}
-            {#if $selectedOption === "explanation"}
-              <th>Explanation</th>
+
+            {#if selectedOptions.explanation}
+              <th style="width: 8%;">Explanation</th>
             {/if}
           </tr>
         </thead>
@@ -360,7 +349,7 @@
           {#each filteredData as row}
             <tr>
               <td
-                >{exampleData.findIndex((originalRow) => originalRow === row) +
+                >{filteredData.findIndex((originalRow) => originalRow === row) +
                   1}</td
               >
               <td>
@@ -368,44 +357,50 @@
                   href={row.article_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  style="
-                    display: inline-block;
-                    width: 100%;
-                    white-space: wrap;
-                    overflow:scroll;
-                    text-overflow: ellipsis;
-                  "
+                  style="display: inline-block;
+                  white-space: wrap;
+                  max-width: 100px;
+                  overflow:scroll;
+                  text-overflow: ellipsis;
+                "
                 >
                   {row.article_url}
                 </a>
               </td>
-              <td>{row.text}</td>
+              <td style="width: 40%; white-space:wrap; max-width: 500px;"
+                >{row.text}</td
+              >
               <td>{row.predicted_value ? "Yes" : "No"}</td>
-              {#if $selectedOption === "certainty"}
+
+              {#if selectedOptions.certainty}
                 {#if row.probability !== undefined}
                   <td style="text-align: center;">
                     <span
                       style="
-                    background-color: {getConfidenceLevel(row.probability)
-                        .color}; 
-                    color: black; 
-                    font-weight: bold; 
-                    padding: 4px 10px; 
-                    border-radius: 10px; 
-                    display: inline-block;"
+                        background-color: {getConfidenceLevel(row.probability)
+                        .color};
+                        color: black;
+                        font-weight: bold;
+                        padding: 4px 10px;
+                        border-radius: 10px;
+                        display: inline-block;
+                      "
                     >
                       {getConfidenceLevel(row.probability).label} ({row.probability})
+                      that {row.predicted_value ? "Yes" : "No"} is correct
                     </span>
                   </td>
                 {/if}
               {/if}
-              {#if $selectedOption === "modelConsistency"}
-                <td>{row.model_consistency}</td>
+
+              {#if selectedOptions.modelConsistency}
+                <td
+                  >3/5 models agree with {row.predicted_value ? "Yes" : "No"}
+                  {row.model_consistency}</td
+                >
               {/if}
-              {#if $selectedOption === "promptConsistency"}
-                <td>{row.prompt_consistency}</td>
-              {/if}
-              {#if $selectedOption === "explanation"}
+
+              {#if selectedOptions.explanation}
                 <td>{row.explanation}</td>
               {/if}
             </tr>
@@ -487,7 +482,9 @@
 
   .all-data {
     margin: 0% 5% 3% 5%;
-    overflow: scroll;
+    width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
   }
 
   button {
@@ -500,14 +497,17 @@
   }
 
   .styled-table {
-    table-layout: fixed;
-    width: 100%;
+    width: max-content;
+    min-width: 100%;
     border-collapse: collapse;
+
+    /* table-layout: fixed; */
+    /* width: 100%; */
     margin: 25px 0;
     font-size: 0.9em;
     /* font-family: "Arial", sans-serif; */
     border-radius: 5px 5px 0 0;
-    overflow: hidden;
+    overflow: scroll;
     border-radius: 1em;
     box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
   }
@@ -572,7 +572,7 @@
     color: #5facf2;
   }
 
-  .button-group {
+  .checkbox-group {
     display: flex;
     flex-direction: row;
     gap: 20px; /* Space between buttons */
@@ -580,7 +580,7 @@
   }
 
   /* General button style */
-  .button-group-c {
+  .checkbox-group-c {
     display: block;
     text-decoration: none;
     font-size: 18px;
@@ -594,7 +594,12 @@
     background-color: transparent;
   }
 
-  .button-group-c:hover {
+  .checkbox-group-c:hover {
+    background-color: #7eb7f5;
+    color: white;
+  }
+
+  .checkbox-group-c:checked {
     background-color: #7eb7f5;
     color: white;
   }
