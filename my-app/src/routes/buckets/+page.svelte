@@ -53,6 +53,7 @@
   let showBucket;
 
   let filteredByBucket = [];
+  let initedData = [];
 
   // Map bucket name to exclusive probability ranges
   const bucketRanges = {
@@ -68,9 +69,20 @@
 
   function filterByBucket(bucketName) {
     selectedBucket = bucketName;
-
     const [minProb, maxProb] = bucketRanges[bucketName] || [0, 1];
 
+    filteredData = initedData.filter(
+      (row) =>
+        row.probability !== undefined &&
+        row.probability >= minProb &&
+        row.probability < maxProb
+    );
+    console.log(
+      `Filtered by bucket: ${selectedBucket}, found ${filteredData.length} results`
+    );
+  }
+
+  function initData() {
     // Group annotations by article_url
     const groupedAnnotations = {};
     exampleData.forEach((row) => {
@@ -86,14 +98,8 @@
       group.sort((a, b) => a.perturbation_index - b.perturbation_index);
     });
 
-    filteredByBucket = exampleData
-      .filter(
-        (row) =>
-          row.perturbation_index === 0 &&
-          row.probability !== undefined &&
-          row.probability >= minProb &&
-          row.probability < maxProb
-      )
+    initedData = exampleData
+      .filter((row) => row.perturbation_index === 0)
       .map((row) => {
         const perturbations = groupedAnnotations[row.article_url] || [];
 
@@ -121,39 +127,36 @@
         };
       });
 
-    console.log(
-      `Filtered by bucket: ${selectedBucket}, found ${filteredByBucket.length} results`
-    );
+    console.log(`Init found ${initedData.length} results`);
 
     // average agreement across the filtered dataset
-    const totalAgreement = filteredByBucket.reduce(
+    const totalAgreement = initedData.reduce(
       (sum, row) => sum + row.agreement_score,
       0
     );
     const averageAgreement =
-      filteredByBucket.length > 0
-        ? (totalAgreement / (filteredByBucket.length * 4)) * 4 // Keep fraction representation
+      initedData.length > 0
+        ? (totalAgreement / (initedData.length * 4)) * 4 // Keep fraction representation
         : 0;
 
     console.log(`Average Agreement Score: ${averageAgreement.toFixed(2)}/4`);
-
-    filterBySampleSize();
+    filteredData = initedData;
   }
 
-  function filterBySampleSize() {
-    if (!filteredByBucket || filteredByBucket.length === 0) {
+  function filterBySampleSize(sampleSize) {
+    if (!initedData || initedData.length === 0) {
       filteredData = [];
       return;
     }
 
     if (sampleSize == 0) {
-      filteredData = filteredByBucket;
+      filteredData = initedData;
       console.log("Not filtering by sample size yet");
       return;
     }
 
     const rng = seedrandom(randomSeed);
-    filteredData = filteredByBucket
+    filteredData = initedData
       .sort(() => rng() - 0.5) // Shuffle
       .slice(0, sampleSize); // Limit to sample size
 
@@ -179,49 +182,13 @@
       const response = await fetch(`/api/getExamples?prompt_id=${id}`);
       if (response.ok) {
         exampleData = await response.json();
-        filterByBucket(selectedBucket); // Ensure filtering applies on first load
+        initData(); // Ensure filtering applies on first load
       } else {
         console.error("Failed to fetch examples");
       }
     } catch (error) {
       console.error("Error fetching examples:", error);
     }
-
-    // try {
-    //   const response = await fetch(`/api/getExamples?prompt_id=${id}`);
-    //   if (response.ok) {
-    //     let rawData = await response.json();
-    //     console.log("Fetched Data:", rawData);
-
-    //     const basePrompts = rawData.filter(
-    //       (row) => row.perturbation_index === 0
-    //     );
-    //     if (basePrompts.length === 0) {
-    //       console.warn("No base prompts found.");
-    //       return;
-    //     }
-
-    //     // Find perturbations (1-4) that match the base predictions
-    //     basePrompts.forEach((basePrompt) => {
-    //       const consistentCount = rawData.filter(
-    //         (row) =>
-    //           row.perturbation_index > 0 && // Only perturbations
-    //           row.prompt_id === basePrompt.prompt_id && // Same prompt
-    //           row.predicted_value === basePrompt.predicted_value // Same prediction
-    //       ).length;
-
-    //       basePrompt.model_consistency = `${consistentCount}/4 models agree`;
-    //     });
-
-    //     // Assign the modified base prompts to be displayed
-    //     exampleData = basePrompts;
-    //     console.log("Final Processed Data:", exampleData);
-    //   } else {
-    //     console.error("Failed to fetch examples");
-    //   }
-    // } catch (error) {
-    //   console.error("Error fetching examples:", error);
-    // }
   });
 
   function formatTimeSubmitted(time) {
@@ -245,32 +212,20 @@
     return [textP, timeP];
   }
 
-  // function filterData() {
-  //   if (!exampleData || exampleData.length === 0) {
-  //     filteredData = [];
-  //     return;
-  //   }
-
-  //   const rng = seedrandom(randomSeed);
-  //   const shuffled = [...exampleData];
-
-  //   for (let i = shuffled.length - 1; i > 0; i--) {
-  //     const j = Math.floor(rng() * (i + 1));
-  //     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  //   }
-
-  //   filteredData = shuffled.slice(0, sampleSize);
-  // }
-
-  // bucket scripts
-
   const buckets = [
     { name: "Very Likely", color: "#5EE85C" },
     { name: "Somewhat Likely", color: "#BEE85C" },
     { name: "Even Chance", color: "#E8E35C" },
     { name: "Somewhat Unlikely", color: "#E88D5C" },
     { name: "Very Unlikely", color: "#E85C5C" },
-    // { name: "Self-defined Bucket", color: "#60ACF2" },
+  ];
+
+  const sampleSizes = [
+    { name: "All", num: 0 },
+    { name: "10", num: 10 },
+    { name: "20", num: 20 },
+    { name: "30", num: 30 },
+    { name: "40", num: 40 },
   ];
 
   let bucketStats = {
@@ -295,12 +250,6 @@
       return { label: "Very Likely", color: "#5EE85C" }; // Green
     }
   }
-
-  // function filterByBucket(bucketName) {
-  //   selectedBucket = bucketName;
-  //   // Apply your filtering logic here based on the bucket
-  //   console.log(`Filtering by: ${bucketName}`);
-  // }
 
   // For page options
   // let selectedOption = writable(null);
@@ -395,14 +344,12 @@
   <select
     id="sampleSize"
     bind:value={sampleSize}
-    on:change={filterBySampleSize}
+    on:change={() => filterBySampleSize(sampleSize)}
     style="padding: 5px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px;"
   >
-    <option value="0">All</option>
-    <option value="10">10</option>
-    <option value="25">25</option>
-    <option value="50">50</option>
-    <option value="100">100</option>
+    {#each sampleSizes as size}
+      <option value={size.num}>{size.name}</option>
+    {/each}
   </select>
   <span style="font-weight: bold;">annotation examples from bucket</span>
   <select
@@ -416,6 +363,20 @@
     {/each}
   </select>
 </div>
+
+<!-- <div style="display: flex; align-items: center; gap: 8px; margin: 0 5% 0 5%;">
+  <label for="sortAgree" style="font-weight: bold;">Sort by</label>
+  <select
+    id="sortAgree"
+    bind:value={sampleSize}
+    on:change={() => sortByAgreement()}
+    style="padding: 5px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px;"
+  >
+    {#each sampleSizes as size}
+      <option value={size.num}>{size.name}</option>
+    {/each}
+  </select>
+</div> -->
 
 <section>
   <div class="all-data">
