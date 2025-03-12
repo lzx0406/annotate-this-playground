@@ -14,6 +14,7 @@ export async function GET({ url }) {
     // Query to join Video, Comment, and Annotation tables based on the prompt_id
     const [rows] = await db.query(
       `SELECT 
+        Article.article_id AS article_id,
         Article.url AS article_url, 
         Article.text AS text, 
         Annotation.true_value, 
@@ -24,8 +25,9 @@ export async function GET({ url }) {
         Annotation.perturbation_index 
        FROM Article 
        JOIN Annotation ON Article.article_id = Annotation.article_id 
-       WHERE Annotation.prompt_id = ?`,
-      [promptId]
+       WHERE Annotation.prompt_id BETWEEN ? AND ?
+       ORDER BY Annotation.perturbation_index ASC`,
+      [promptId, promptId + 4]
     );
 
     return new Response(JSON.stringify(rows), { status: 200 });

@@ -65,21 +65,154 @@
   // Ensure `selectedBucket` starts with a valid value
   let selectedBucket = "Very Likely";
 
+  // function filterByBucket(bucketName) {
+  //   selectedBucket = bucketName; // Update the bucket state
+
+  //   const [minProb, maxProb] = bucketRanges[bucketName] || [0, 1];
+
+  //   filteredByBucket = exampleData.filter(
+  //     (row) =>
+  //       row.perturbation_index == 0 &&
+  //       row.probability !== undefined &&
+  //       row.probability >= minProb &&
+  //       row.probability < maxProb // Exclusive max
+  //   );
+
+  //   console.log(
+  //     `Filtered by bucket: ${selectedBucket}, found ${filteredByBucket.length} results`
+  //   );
+
+  //   filterBySampleSize();
+  // }
+  // function filterByBucket(bucketName) {
+  //   selectedBucket = bucketName; // Update the bucket state
+
+  //   const [minProb, maxProb] = bucketRanges[bucketName] || [0, 1];
+
+  //   // Group annotations by article_id (or another identifier)
+  //   const groupedAnnotations = {};
+  //   exampleData.forEach((row) => {
+  //     if (!groupedAnnotations[row.article_url]) {
+  //       groupedAnnotations[row.article_url] = [];
+  //     }
+  //     groupedAnnotations[row.article_url].push(row);
+  //   });
+
+  //   // Filter for perturbation_index == 0 and apply probability bucket filter
+  //   filteredByBucket = exampleData
+  //     .filter(
+  //       (row) =>
+  //         row.perturbation_index === 0 &&
+  //         row.probability !== undefined &&
+  //         row.probability >= minProb &&
+  //         row.probability < maxProb
+  //     )
+  //     .map((row) => {
+  //       const perturbations = groupedAnnotations[row.article_url] || [];
+
+  //       // Get predicted_value for perturbation_index == 0
+  //       const basePrediction = row.predicted_value;
+
+  //       // Check agreement with the next 4 perturbations (1-4)
+  //       const matchingPerturbations = perturbations
+  //         .filter((p) => p.perturbation_index >= 1 && p.perturbation_index <= 4)
+  //         .filter((p) => p.predicted_value === basePrediction).length;
+
+  //       // Compute agreement score (how many out of 4 match)
+  //       return {
+  //         ...row,
+  //         agreement_score: matchingPerturbations / 4, // Store as percentage (0.0 to 1.0)
+  //       };
+  //     });
+
+  //   console.log(
+  //     `Filtered by bucket: ${selectedBucket}, found ${filteredByBucket.length} results`
+  //   );
+
+  //   // Optional: Compute average agreement across the filtered dataset
+  //   const totalAgreement = filteredByBucket.reduce(
+  //     (sum, row) => sum + row.agreement_score,
+  //     0
+  //   );
+  //   const averageAgreement =
+  //     filteredByBucket.length > 0
+  //       ? totalAgreement / filteredByBucket.length
+  //       : 0;
+  //   console.log(`Average Agreement Score: ${averageAgreement.toFixed(2)}`);
+
+  //   filterBySampleSize();
+  // }
+
   function filterByBucket(bucketName) {
-    selectedBucket = bucketName; // Update the bucket state
+    selectedBucket = bucketName;
 
     const [minProb, maxProb] = bucketRanges[bucketName] || [0, 1];
 
-    filteredByBucket = exampleData.filter(
-      (row) =>
-        row.probability !== undefined &&
-        row.probability >= minProb &&
-        row.probability < maxProb // Exclusive max
-    );
+    // Group annotations by article_url
+    const groupedAnnotations = {};
+    exampleData.forEach((row) => {
+      if (!groupedAnnotations[row.article_url]) {
+        groupedAnnotations[row.article_url] = [];
+      }
+      groupedAnnotations[row.article_url].push(row);
+    });
+
+    console.log("Grouped Annotations by article_url:", groupedAnnotations);
+
+    Object.values(groupedAnnotations).forEach((group) => {
+      group.sort((a, b) => a.perturbation_index - b.perturbation_index);
+    });
+
+    filteredByBucket = exampleData
+      .filter(
+        (row) =>
+          row.perturbation_index === 0 &&
+          row.probability !== undefined &&
+          row.probability >= minProb &&
+          row.probability < maxProb
+      )
+      .map((row) => {
+        const perturbations = groupedAnnotations[row.article_url] || [];
+
+        const basePrediction = row.predicted_value;
+
+        console.log(
+          `Processing article_id: ${row.article_url}, basePrediction: ${basePrediction}`
+        );
+
+        // next 4 perturbations
+        const matchingPerturbations = perturbations
+          .filter((p) => p.perturbation_index >= 1 && p.perturbation_index <= 4)
+          .filter((p) => p.predicted_value === basePrediction);
+
+        const agreementCount = matchingPerturbations.length;
+
+        console.log(
+          `Agreement for article_id ${row.article_url}: ${agreementCount}/4`
+        );
+
+        return {
+          ...row,
+          agreement_display: `${agreementCount}/4 models agree`,
+          agreement_score: agreementCount,
+        };
+      });
 
     console.log(
       `Filtered by bucket: ${selectedBucket}, found ${filteredByBucket.length} results`
     );
+
+    // average agreement across the filtered dataset
+    const totalAgreement = filteredByBucket.reduce(
+      (sum, row) => sum + row.agreement_score,
+      0
+    );
+    const averageAgreement =
+      filteredByBucket.length > 0
+        ? (totalAgreement / (filteredByBucket.length * 4)) * 4 // Keep fraction representation
+        : 0;
+
+    console.log(`Average Agreement Score: ${averageAgreement.toFixed(2)}/4`);
 
     filterBySampleSize();
   }
@@ -92,6 +225,7 @@
 
     if (sampleSize == 0) {
       filteredData = filteredByBucket;
+      console.log("Not filtering by sample size yet");
       return;
     }
 
@@ -129,6 +263,42 @@
     } catch (error) {
       console.error("Error fetching examples:", error);
     }
+
+    // try {
+    //   const response = await fetch(`/api/getExamples?prompt_id=${id}`);
+    //   if (response.ok) {
+    //     let rawData = await response.json();
+    //     console.log("Fetched Data:", rawData);
+
+    //     const basePrompts = rawData.filter(
+    //       (row) => row.perturbation_index === 0
+    //     );
+    //     if (basePrompts.length === 0) {
+    //       console.warn("No base prompts found.");
+    //       return;
+    //     }
+
+    //     // Find perturbations (1-4) that match the base predictions
+    //     basePrompts.forEach((basePrompt) => {
+    //       const consistentCount = rawData.filter(
+    //         (row) =>
+    //           row.perturbation_index > 0 && // Only perturbations
+    //           row.prompt_id === basePrompt.prompt_id && // Same prompt
+    //           row.predicted_value === basePrompt.predicted_value // Same prediction
+    //       ).length;
+
+    //       basePrompt.model_consistency = `${consistentCount}/4 models agree`;
+    //     });
+
+    //     // Assign the modified base prompts to be displayed
+    //     exampleData = basePrompts;
+    //     console.log("Final Processed Data:", exampleData);
+    //   } else {
+    //     console.error("Failed to fetch examples");
+    //   }
+    // } catch (error) {
+    //   console.error("Error fetching examples:", error);
+    // }
   });
 
   function formatTimeSubmitted(time) {
@@ -395,8 +565,9 @@
 
               {#if selectedOptions.modelConsistency}
                 <td
-                  >3/5 models agree with {row.predicted_value ? "Yes" : "No"}
-                  {row.model_consistency}</td
+                  >{row.agreement_display} models agree with {row.predicted_value
+                    ? "Yes"
+                    : "No"}</td
                 >
               {/if}
 
