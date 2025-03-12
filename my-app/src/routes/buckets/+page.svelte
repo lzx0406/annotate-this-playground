@@ -17,6 +17,7 @@
     faHouse,
     faToggleOn,
     faToggleOff,
+    faChevronDown,
   } from "@fortawesome/free-solid-svg-icons";
 
   import {
@@ -64,84 +65,6 @@
 
   // Ensure `selectedBucket` starts with a valid value
   let selectedBucket = "Very Likely";
-
-  // function filterByBucket(bucketName) {
-  //   selectedBucket = bucketName; // Update the bucket state
-
-  //   const [minProb, maxProb] = bucketRanges[bucketName] || [0, 1];
-
-  //   filteredByBucket = exampleData.filter(
-  //     (row) =>
-  //       row.perturbation_index == 0 &&
-  //       row.probability !== undefined &&
-  //       row.probability >= minProb &&
-  //       row.probability < maxProb // Exclusive max
-  //   );
-
-  //   console.log(
-  //     `Filtered by bucket: ${selectedBucket}, found ${filteredByBucket.length} results`
-  //   );
-
-  //   filterBySampleSize();
-  // }
-  // function filterByBucket(bucketName) {
-  //   selectedBucket = bucketName; // Update the bucket state
-
-  //   const [minProb, maxProb] = bucketRanges[bucketName] || [0, 1];
-
-  //   // Group annotations by article_id (or another identifier)
-  //   const groupedAnnotations = {};
-  //   exampleData.forEach((row) => {
-  //     if (!groupedAnnotations[row.article_url]) {
-  //       groupedAnnotations[row.article_url] = [];
-  //     }
-  //     groupedAnnotations[row.article_url].push(row);
-  //   });
-
-  //   // Filter for perturbation_index == 0 and apply probability bucket filter
-  //   filteredByBucket = exampleData
-  //     .filter(
-  //       (row) =>
-  //         row.perturbation_index === 0 &&
-  //         row.probability !== undefined &&
-  //         row.probability >= minProb &&
-  //         row.probability < maxProb
-  //     )
-  //     .map((row) => {
-  //       const perturbations = groupedAnnotations[row.article_url] || [];
-
-  //       // Get predicted_value for perturbation_index == 0
-  //       const basePrediction = row.predicted_value;
-
-  //       // Check agreement with the next 4 perturbations (1-4)
-  //       const matchingPerturbations = perturbations
-  //         .filter((p) => p.perturbation_index >= 1 && p.perturbation_index <= 4)
-  //         .filter((p) => p.predicted_value === basePrediction).length;
-
-  //       // Compute agreement score (how many out of 4 match)
-  //       return {
-  //         ...row,
-  //         agreement_score: matchingPerturbations / 4, // Store as percentage (0.0 to 1.0)
-  //       };
-  //     });
-
-  //   console.log(
-  //     `Filtered by bucket: ${selectedBucket}, found ${filteredByBucket.length} results`
-  //   );
-
-  //   // Optional: Compute average agreement across the filtered dataset
-  //   const totalAgreement = filteredByBucket.reduce(
-  //     (sum, row) => sum + row.agreement_score,
-  //     0
-  //   );
-  //   const averageAgreement =
-  //     filteredByBucket.length > 0
-  //       ? totalAgreement / filteredByBucket.length
-  //       : 0;
-  //   console.log(`Average Agreement Score: ${averageAgreement.toFixed(2)}`);
-
-  //   filterBySampleSize();
-  // }
 
   function filterByBucket(bucketName) {
     selectedBucket = bucketName;
@@ -397,6 +320,16 @@
     selectedOptions[option] = !selectedOptions[option];
     console.log("Updated selected options:", selectedOptions);
   }
+
+  let expandedRows = writable({});
+
+  function toggleExpand(index) {
+    expandedRows.update((rows) => {
+      let newRows = { ...rows }; // Copy object
+      newRows[index] = !newRows[index]; // Toggle state
+      return newRows;
+    });
+  }
 </script>
 
 <section class="head">
@@ -497,10 +430,10 @@
           <tr>
             <th style="width: 5%;"></th>
             <th style="width: 10%; max-width: 100px;">Article URL</th>
-            <th style="width: 40%; white-space:normal; max-width: 500px;"
+            <th style="width: 40%; white-space:normal; max-width: 400px;"
               >Article Text</th
             >
-            <th style="width: 8%;">Predicted Value</th>
+            <th style="width: 5%;">Predicted Value</th>
 
             {#if selectedOptions.certainty}
               <th style="width: 5%; max-width: 100px">Certainty</th>
@@ -511,12 +444,12 @@
             {/if}
 
             {#if selectedOptions.explanation}
-              <th style="width: 8%;">Explanation</th>
+              <th style="width: 5%;">Explanation</th>
             {/if}
           </tr>
         </thead>
         <tbody>
-          {#each filteredData as row}
+          {#each filteredData as row, i}
             <tr>
               <td
                 >{filteredData.findIndex((originalRow) => originalRow === row) +
@@ -534,12 +467,38 @@
                   text-overflow: ellipsis;
                 "
                 >
-                  {row.article_url}
+                  {row.article_url.slice(28, 60)}
                 </a>
               </td>
-              <td style="width: 40%; white-space:wrap; max-width: 500px;"
+              <!-- <td style="width: 40%; white-space:wrap; max-width: 500px;"
                 >{row.text}</td
+              > -->
+              <td
+                style="display:flex; flex-direction:row"
+                on:click={() => toggleExpand(i)}
               >
+                <!-- <button
+                  on:click={() => toggleExpand(i)}
+                  style="border: none; background: none; color: blue; cursor: pointer;"
+                >
+                  {$expandedRows[i] ? "Show Less ▲" : "Show More ▼"}
+                </button> -->
+
+                {#if $expandedRows[i]}
+                  <p style="width:100%; white-space:wrap; max-width: 500px;">
+                    <Fa icon={faChevronDown} style="color: #5facf2" /> &nbsp; {row.text}
+                  </p>
+                {:else}
+                  <p
+                    style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
+                  >
+                    <Fa icon={faChevronRight} style="color: #5facf2" /> &nbsp; {row.text.slice(
+                      0,
+                      100
+                    )}
+                  </p>
+                {/if}
+              </td>
               <td>{row.predicted_value ? "Yes" : "No"}</td>
 
               {#if selectedOptions.certainty}
@@ -653,7 +612,7 @@
 
   .all-data {
     margin: 0% 5% 3% 5%;
-    width: 100%;
+    width: 90%;
     overflow-x: auto;
     white-space: nowrap;
   }
@@ -668,7 +627,7 @@
   }
 
   .styled-table {
-    width: max-content;
+    /* width: max-content; */
     min-width: 100%;
     border-collapse: collapse;
 

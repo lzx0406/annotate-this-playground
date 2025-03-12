@@ -194,7 +194,8 @@
 
     const trainingSet = data.slice(0, trainSize);
     const holdoutSet = data.slice(trainSize, trainSize + holdoutSize);
-    const testSet = data.slice(trainSize + holdoutSize);
+    let testSet = data.slice(trainSize + holdoutSize);
+    testSet = testSet.slice(0, Math.min(50, testSet.length));
 
     return { trainingSet, holdoutSet, testSet };
   }
