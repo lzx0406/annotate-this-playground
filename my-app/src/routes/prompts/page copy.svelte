@@ -8,6 +8,8 @@
 
   import fs from "fs/promises"; // For writing JSONL files
 
+  import { goto } from "$app/navigation";
+
   import { getContext } from "svelte";
   import Fa from "svelte-fa";
   import {
@@ -25,6 +27,7 @@
     userName,
     prompts,
     latestProgress,
+    numAnnotated,
   } from "$lib/stores";
 
   let promptList = [];
@@ -35,201 +38,48 @@
   let interval;
   console.log("GETTT waiting for annotation:" + $waitingForAnnotation);
   console.log("GETTT Latest:" + $latestProgress);
+  console.log("GETTT numAnnn:" + $numAnnotated);
 
   let showPopup = false;
   let newAddingPrompt;
 
-  // onMount(async () => {
-  //   console.log("onMount triggered!");
-
-  //   console.log("User ID and name:", get(userId), get(userName));
-  //   if (!get(userId) || !get(userName)) {
-  //     console.warn("User not found, logging out...");
-  //     logout();
-  //     return; // Ensure execution stops here if logout happens
-  //   }
-
-  //   console.log("Calling fetchPastPrompts...");
-  //   fetchPastPrompts(); // Runs first
-
-  //   // Handle current prompts
-  //   const currentPrompt = get(pendingPrompt);
-  //   const currentProgress = get(latestProgress);
-  //   console.log("AFTER REFRESH got prompt:", currentPrompt);
-  //   console.log("AFTER REFRESH got latest:", currentProgress);
-
-  //   if (
-  //     currentPrompt &&
-  //     currentProgress !== "annotation completed" &&
-  //     currentProgress !== "error sending data to OpenAI" &&
-  //     currentProgress !== "waiting for annotation task"
-  //   ) {
-  //     waitingForAnnotation.set(true);
-  //     console.log("AFTER REFRESH got YES still annotating");
-  //   } else {
-  //     waitingForAnnotation.set(false);
-  //     console.log("AFTER REFRESH NOT still annotating");
-  //   }
-
-  //   // Timestamp logic
-  //   const storedTimestamp = localStorage.getItem("annotationStartTimestamp");
-  //   if (storedTimestamp && $waitingForAnnotation) {
-  //     manageTimer();
-  //   }
-
-  //   // Fetch admin data
-  //   console.log("Fetching admin data...");
-  //   admin_p_id = 1;
-  //   try {
-  //     const response = await fetch(`/api/getAdminData?prompt_id=${admin_p_id}`);
-  //     if (response.ok) {
-  //       adminData = await response.json();
-  //       console.log(`Found ${adminData.length} rows in admin data.`);
-  //     } else {
-  //       console.error("Failed to fetch admin data");
-  //     }
-  //   } catch (error) {
-  //     console.error("Error fetching admin data:", error);
-  //   }
-
-  //   // Poll OpenAI status every 10 seconds
-  //   console.log("Setting up polling for OpenAI progress...");
-  //   const interval = setInterval(async () => {
-  //     try {
-  //       const response = await fetch("/api/toOpenAI");
-  //       if (response.ok) {
-  //         const { progress } = await response.json();
-  //         latestProgress.set(progress);
-  //         console.log("UPDATED LATEST PROGRESS to:", get(latestProgress));
-  //         console.log("waiting for annotation??", get(waitingForAnnotation));
-  //         console.log("current pending prompt:", get(pendingPrompt));
-  //       } else {
-  //         console.error("Failed to fetch progress");
-  //       }
-  //     } catch (error) {
-  //       console.error("Error fetching progress:", error);
-  //     }
-  //   }, 10000);
-
-  //   return () => clearInterval(interval); // Cleanup on unmount
-  // });
+  onMount(() => {
+    if (!get(userId) || !get(userName)) {
+      logout();
+    }
+    fetchPastPrompts();
+  });
 
   onMount(() => {
-    try {
-      console.log("✅ onMount triggered! This should always print.");
+    const currentPrompt = get(pendingPrompt);
+    const currentProgress = get(latestProgress);
+    console.log("AFTER REFRESH got prompt" + currentPrompt);
+    console.log("AFTER REFRESH got latest" + currentProgress);
 
-      // Debugging userId and userName before accessing stores
-      console.log("User ID before store access:", userId);
-      console.log("User Name before store access:", userName);
-
-      const userIdValue = get(userId);
-      const userNameValue = get(userName);
-
-      console.log("User ID after store access:", userIdValue);
-      console.log("User Name after store access:", userNameValue);
-
-      if (!userIdValue || !userNameValue) {
-        console.warn("🚨 User is missing, calling logout...");
-        logout();
-        return;
-      }
-
-      console.log("✅ Calling fetchPastPrompts...");
-      fetchPastPrompts();
-    } catch (error) {
-      console.error("🚨 Error inside onMount():", error);
+    if (
+      currentPrompt &&
+      currentProgress !== "annotation completed" &&
+      currentProgress !== "error sending data to OpenAI" &&
+      currentProgress !== "waiting for annotation task"
+    ) {
+      waitingForAnnotation.set(true);
+      console.log("AFTER REFRESH got YES still annotating");
+    } else {
+      waitingForAnnotation.set(false);
+      numAnnotated.set("0");
+      console.log("AFTER REFRESH NOT still annotating");
     }
   });
 
-  console.log("line aft onMount");
+  onMount(() => {
+    const storedTimestamp = localStorage.getItem("annotationStartTimestamp");
+    if (storedTimestamp && $waitingForAnnotation) {
+      manageTimer();
+    }
+  });
 
-  // onMount(() => {
-  //   console.log("user id and name" + userId + userName);
-  //   if (!get(userId) || !get(userName)) {
-  //     logout();
-  //   }
-
-  //   // fetch pp
-  //   console.log("onMount triggered, calling fetchPastPrompts...");
-  //   fetchPastPrompts();
-
-  //   // current prompts
-  //   const currentPrompt = get(pendingPrompt);
-  //   const currentProgress = get(latestProgress);
-  //   console.log("AFTER REFRESH got prompt" + currentPrompt);
-  //   console.log("AFTER REFRESH got latest" + currentProgress);
-
-  //   if (
-  //     currentPrompt &&
-  //     currentProgress !== "annotation completed" &&
-  //     currentProgress !== "error sending data to OpenAI" &&
-  //     currentProgress !== "waiting for annotation task"
-  //   ) {
-  //     waitingForAnnotation.set(true);
-  //     console.log("AFTER REFRESH got YES still annotating");
-  //   } else {
-  //     waitingForAnnotation.set(false);
-  //     console.log("AFTER REFRESH NOT still annotating");
-  //   }
-
-  //   // timestamp
-  //   const storedTimestamp = localStorage.getItem("annotationStartTimestamp");
-  //   if (storedTimestamp && $waitingForAnnotation) {
-  //     manageTimer();
-  //   }
-  // });
-
-  // //fetch admin data
-  // onMount(async () => {
-  //   // console.log("HEREEEEEE" + $selectedAnnotationType);
-  //   // if ($selectedAnnotationType === "call to action") {
-  //   //   admin_p_id = 4;
-  //   // } else if ($selectedAnnotationType === "concern wildlife") {
-  //   //   admin_p_id = 5;
-  //   // } else
-  //   admin_p_id = 1;
-  //   try {
-  //     // Fetch data from the backend
-  //     const response = await fetch(`/api/getAdminData?prompt_id=${admin_p_id}`);
-  //     if (response.ok) {
-  //       adminData = await response.json();
-  //       // console.log("Found admin data for type" + $selectedAnnotationType);
-  //       console.log(
-  //         `Found ${adminData.length} rows in admin data for type: ${$selectedAnnotationType}`
-  //       );
-  //     } else {
-  //       console.error("Failed to fetch admin data");
-  //     }
-  //   } catch (error) {
-  //     console.error("Error fetching admin data:", error);
-  //   }
-  // });
-
-  // onMount(() => {
-  //   const interval = setInterval(async () => {
-  //     try {
-  //       const response = await fetch("/api/toOpenAI");
-  //       if (response.ok) {
-  //         const { progress } = await response.json();
-  //         latestProgress.set(progress);
-  //         console.log("UPDATED LATEST PROGRESS to:", get(latestProgress));
-  //         console.log("waiting for annotation??", get(waitingForAnnotation));
-  //         console.log("current pending prompt:" + get(pendingPrompt));
-  //       } else {
-  //         console.error("Failed to fetch progress");
-  //       }
-  //     } catch (error) {
-  //       console.error("Error fetching progress:", error);
-  //     }
-  //   }, 10000); // Poll every 10 seconds
-
-  //   return () => clearInterval(interval); // Cleanup on component unmount
-  // });
-
-  // Backend function to handle fetching prompts with metrics
   async function fetchPastPrompts() {
     const userIdValue = get(userId); // Get the latest value of userId
-    console.log("FETCHING PAST PP");
 
     if (!userIdValue) {
       console.error("User ID is missing");
@@ -239,35 +89,34 @@
     try {
       // Fetch prompts for the user
       const response = await fetch(`/prompts?userId=${userIdValue}`);
-      console.log(response);
 
       if (response.ok) {
         const data = await response.json();
-        console.log("GOT DATAAAA" + data);
 
+        // Filter to only include prompts with perturbation_index = 0
         const filteredPrompts = data.filter(
           (prompt) => prompt.perturbation_index === 0
         );
 
-        prompts.set(filteredPrompts);
-
         // Process each prompt to ensure metrics are available
-        // const updatedPrompts = data.map((prompt) => {
-        //   // Parse the metrics field if it is stored as JSON
-        //   if (typeof prompt.metrics === "string") {
-        //     try {
-        //       prompt.metrics = JSON.parse(prompt.metrics);
-        //     } catch (error) {
-        //       console.error("Error parsing metrics JSON:", error);
-        //     }
-        //   }
-        //   return prompt;
-        // });
+        const updatedPrompts = filteredPrompts.map((prompt) => {
+          if (typeof prompt.metrics === "string") {
+            try {
+              prompt.metrics = JSON.parse(prompt.metrics);
+            } catch (error) {
+              console.error("Error parsing metrics JSON:", error);
+            }
+          }
+          return prompt;
+        });
 
-        // Update the prompts store with the updated data containing metrics
-        // prompts.set(updatedPrompts);
+        // Update the Svelte store with the filtered data
+        prompts.set(updatedPrompts);
 
-        // console.log("Updated prompts with metrics:", updatedPrompts);
+        console.log(
+          "Updated prompts with metrics (filtered perturbation = 0):",
+          updatedPrompts
+        );
       } else {
         console.error("Failed to fetch prompts");
       }
@@ -275,6 +124,32 @@
       console.error("Error fetching prompts:", error);
     }
   }
+
+  //fetch admin data
+  onMount(async () => {
+    console.log("HEREEEEEE" + $selectedAnnotationType);
+    // if ($selectedAnnotationType === "call to action") {
+    //   admin_p_id = 4;
+    // } else if ($selectedAnnotationType === "concern wildlife") {
+    //   admin_p_id = 5;
+    // } else
+    admin_p_id = 1;
+    try {
+      // Fetch data from the backend
+      const response = await fetch(`/api/getAdminData?prompt_id=${admin_p_id}`);
+      if (response.ok) {
+        adminData = await response.json();
+        // console.log("Found admin data for type" + $selectedAnnotationType);
+        console.log(
+          `Found ${adminData.length} rows in admin data for type: ${$selectedAnnotationType}`
+        );
+      } else {
+        console.error("Failed to fetch admin data");
+      }
+    } catch (error) {
+      console.error("Error fetching admin data:", error);
+    }
+  });
 
   // let system_prompt = `
   //   You are an assistant specializing in news article text content analysis and annotation.
@@ -299,9 +174,9 @@
 
     1.0) for the following question. Give ONLY the guesses, probabilities and describe how likely it is
 
-    that your guess is correct as one of the following expressions: ${EXPRESSION_LIST}. 
+    that your guess is correct as one of the following expressions: ${EXPRESSION_LIST}, and include an explanation only after specifying "Explanation:" in the end. 
 
-    No other words or explanation. For example:\n\nG1: <first most likely guess, Yes or No answer to the question!>\n\nP1: <the probability between
+    For example:\n\nG1: <first most likely guess, Yes or No answer to the question!>\n\nP1: <the probability between
 
     0.0 and 1.0 that G1 is correct, without any extra commentary whatsoever; just
 
@@ -311,7 +186,7 @@
 
     probability!>\nConfidence: <description of confidence, without any extra
 
-    commentary whatsoever; just a short phrase!>\ \n`;
+    commentary whatsoever; just a short phrase!>\nExplanation: <include your explanation here.> \n`;
 
   function splitData(data) {
     const total = data.length;
@@ -320,13 +195,15 @@
 
     const trainingSet = data.slice(0, trainSize);
     const holdoutSet = data.slice(trainSize, trainSize + holdoutSize);
-    const testSet = data.slice(trainSize + holdoutSize);
+    let testSet = data.slice(trainSize + holdoutSize);
+    testSet = testSet.slice(0, Math.min(50, testSet.length));
 
     return { trainingSet, holdoutSet, testSet };
   }
 
   async function sendPrompt(question) {
     latestProgress.set("pending");
+    numAnnotated.set("0");
     console.log("Got the question" + question);
     showPopup = false;
     const startTimestamp = Date.now();
@@ -388,18 +265,89 @@
         console.error("Failed to send data to OpenAI");
         waitingForAnnotation.set(false);
         latestProgress.set("error sending data to OpenAI");
+        numAnnotated.set("0");
       }
     } catch (error) {
       console.error("Error sending data to OpenAI:", error);
       waitingForAnnotation.set(false);
       latestProgress.set("error sending data to OpenAI");
+      numAnnotated.set("0");
     }
   }
 
+  onMount(() => {
+    const interval = setInterval(async () => {
+      try {
+        const response = await fetch("/api/toOpenAI");
+        if (response.ok) {
+          const { progress } = await response.json();
+          latestProgress.set(progress);
+          console.log("UPDATED LATEST PROGRESS to:", get(latestProgress));
+          console.log("waiting for annotation??", get(waitingForAnnotation));
+          console.log("current pending prompt:" + get(pendingPrompt));
+
+          if (get(latestProgress) === "annotating" && !numAnnotatedPolling) {
+            startNumAnnotatedPolling();
+          }
+        } else {
+          console.error("Failed to fetch progress");
+        }
+      } catch (error) {
+        console.error("Error fetching progress:", error);
+      }
+    }, 10000); // Poll every 10 seconds
+
+    // return () => clearInterval(interval); // Cleanup on component unmount
+
+    // Store interval ID for numAnnotated polling
+    let numAnnotatedPolling = null;
+
+    function startNumAnnotatedPolling() {
+      if (numAnnotatedPolling) return; // Avoid duplicate polling
+
+      console.log("Starting numAnnotated polling...");
+      numAnnotatedPolling = setInterval(async () => {
+        try {
+          const response = await fetch("/api/toOpenAI");
+          if (response.ok) {
+            const { count } = await response.json();
+            numAnnotated.set(count);
+            console.log("UPDATED NUM ANNOTATED to:", get(numAnnotated));
+          } else {
+            console.error("Failed to fetch numAnnotated");
+          }
+
+          // Stop polling if annotation process is completed
+          if (get(latestProgress) !== "annotating") {
+            stopNumAnnotatedPolling();
+          }
+        } catch (error) {
+          console.error("Error fetching numAnnotated:", error);
+        }
+      }, 3000); // Poll every 3 seconds
+    }
+
+    function stopNumAnnotatedPolling() {
+      if (numAnnotatedPolling) {
+        clearInterval(numAnnotatedPolling);
+        numAnnotatedPolling = null;
+        console.log("Stopped numAnnotated polling.");
+      }
+    }
+
+    onDestroy(() => {
+      clearInterval(progressInterval);
+      stopNumAnnotatedPolling();
+    });
+  });
+
   $: {
-    if ($latestProgress === "annotation completed") {
+    if (
+      $latestProgress === "annotation completed" ||
+      $latestProgress === "error sending data to OpenAI"
+    ) {
       // Annotation is done, so clear the pending prompt and refresh data.
-      console.log("CHANGE IN latest to ANNO COMP");
+      console.log("CHANGE IN latest to ANNO COMP, or got error");
       waitingForAnnotation.set(false);
       pendingPrompt.set(null);
       fetchPastPrompts();
@@ -536,9 +484,12 @@
     <!-- Logo -->
     <div class="nav-left">
       <!-- <a href="start"> -->
+      <a href={`../start`} style="vertical-align:top; margin:5px 10px 0 0;"
+        ><Fa icon={faChevronLeft} /></a
+      >
       <img src="/imgs/logo.png" alt="AnnotateThis" class="logo" />
       <!-- </a> -->
-      <h1 style="vertical-align: middle; margin:3% 0% 0% 8%;">Home</h1>
+      <h1 style="vertical-align: middle; margin:5px 0 0 12px;">Home</h1>
     </div>
 
     <!-- Navigation Links -->
@@ -549,7 +500,7 @@
 
     <!-- User -->
     <div class="nav-right">
-      <h1 style="margin:0% 20% 0% 0%;">{get(userName)}</h1>
+      <h1 style="margin:0% 15% 0% 0%;">{get(userName)}</h1>
       <img src="/imgs/user-icon.png" alt="User Icon" class="user-icon" />
     </div>
   </nav>
@@ -562,7 +513,10 @@
 
 <section class="top">
   <h2>You have written {$prompts.length} prompts so far!</h2>
-  <p>We include some summary stats here...</p>
+  <p>
+    View some summary information about your prompts here, and click on the
+    options below each prompt to explore more!
+  </p>
 
   <!-- Prompt Cards -->
   <div class="prompt-cards">
@@ -592,10 +546,28 @@
           <div class="prompt-text-wrapper">
             <p class="prompt-text">{prompt.text}</p>
             <a
+              data-sveltekit-reload
               href={`/buckets?title=${encodeURIComponent(prompt.prompt_id)}&id=${prompt.prompt_id}&idshow=${index + 1}`}
               class="explore-button"
+              on:click|preventDefault={() =>
+                goto(
+                  `/buckets?title=${encodeURIComponent(prompt.prompt_id)}&id=${prompt.prompt_id}&idshow=${index + 1}`
+                )}
             >
-              Explore results from prompt {index + 1}
+              Explore annotations from prompt {index + 1}
+              <Fa icon={faChevronRight} />
+            </a>
+
+            <a
+              data-sveltekit-reload
+              href={`/stats?title=${encodeURIComponent(prompt.prompt_id)}&id=${prompt.prompt_id}&idshow=${index + 1}`}
+              class="explore-button"
+              on:click|preventDefault={() =>
+                goto(
+                  `/stats?title=${encodeURIComponent(prompt.prompt_id)}&id=${prompt.prompt_id}&idshow=${index + 1}`
+                )}
+            >
+              Explore statistics from prompt {index + 1}
               <Fa icon={faChevronRight} />
             </a>
           </div>
@@ -628,7 +600,7 @@
     display: flex;
     align-items: center;
     gap: 15px;
-    width: calc(65% - 10px);
+    width: calc(75% - 10px);
   "
     >
       <p style="margin: 0; white-space: nowrap;">
@@ -636,7 +608,7 @@
         <span style="color: {getColor($latestProgress)}; font-weight: bold;"
           >{$latestProgress}</span
         >
-        &nbsp &nbsp 200/200 samples annotated
+        &nbsp &nbsp {$numAnnotated}/250 (50 * 5 runs) samples annotated
       </p>
       <div
         style="
@@ -649,7 +621,7 @@
       >
         <div
           style="
-        width: {$latestProgress}%;
+        width: {($numAnnotated / 250) * 100}%;
         background-color: #66bb6a;
         height: 100%;
       "
@@ -749,7 +721,7 @@
 
   nav {
     width: 100%;
-    padding: 16px;
+    padding: 16px 16px 16px 0;
     /* border-bottom: 1px solid #e5e7eb; */
     display: flex;
     align-items: center;
@@ -957,7 +929,7 @@
     padding: 16px;
     border-radius: 10px;
     min-width: 200px;
-    max-width: 400px;
+    max-width: 450px;
     box-shadow: 0px 1px 3px rgba(0, 0, 0, 0.1);
     cursor: pointer;
   }

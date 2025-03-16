@@ -8,6 +8,8 @@
 
   import fs from "fs/promises"; // For writing JSONL files
 
+  import { goto } from "$app/navigation";
+
   import { getContext } from "svelte";
   import Fa from "svelte-fa";
   import {
@@ -482,9 +484,17 @@
     <!-- Logo -->
     <div class="nav-left">
       <!-- <a href="start"> -->
+      <a
+        href={`../start`}
+        style="vertical-align:top; margin:5px 10px 0 0;"
+        on:click|preventDefault={() => {
+          goto(`/start`);
+          setTimeout(() => window.location.reload(), 100);
+        }}><Fa icon={faChevronLeft} /></a
+      >
       <img src="/imgs/logo.png" alt="AnnotateThis" class="logo" />
       <!-- </a> -->
-      <h1 style="vertical-align: middle; margin:3% 0% 0% 8%;">Home</h1>
+      <h1 style="vertical-align: middle; margin:5px 0 0 12px;">Home</h1>
     </div>
 
     <!-- Navigation Links -->
@@ -495,7 +505,7 @@
 
     <!-- User -->
     <div class="nav-right">
-      <h1 style="margin:0% 20% 0% 0%;">{get(userName)}</h1>
+      <h1 style="margin:0% 15% 0% 0%;">{get(userName)}</h1>
       <img src="/imgs/user-icon.png" alt="User Icon" class="user-icon" />
     </div>
   </nav>
@@ -508,7 +518,10 @@
 
 <section class="top">
   <h2>You have written {$prompts.length} prompts so far!</h2>
-  <p>We include some summary stats here...</p>
+  <p>
+    View some summary information about your prompts here, and click on the
+    options below each prompt to explore more!
+  </p>
 
   <!-- Prompt Cards -->
   <div class="prompt-cards">
@@ -537,13 +550,37 @@
           </div>
           <div class="prompt-text-wrapper">
             <p class="prompt-text">{prompt.text}</p>
-            <a
-              href={`/buckets?title=${encodeURIComponent(prompt.prompt_id)}&id=${prompt.prompt_id}&idshow=${index + 1}`}
-              class="explore-button"
-            >
-              Explore results from prompt {index + 1}
-              <Fa icon={faChevronRight} />
-            </a>
+            <div>
+              <a
+                href={`/buckets?title=${encodeURIComponent(prompt.prompt_id)}&id=${prompt.prompt_id}&idshow=${index + 1}`}
+                class="explore-button"
+                on:click|preventDefault={() => {
+                  goto(
+                    `/buckets?title=${encodeURIComponent(prompt.prompt_id)}&id=${prompt.prompt_id}&idshow=${index + 1}`
+                  );
+                  setTimeout(() => window.location.reload(), 100); // Force refresh after navigation
+                }}
+              >
+                Explore annotations from prompt {index + 1}
+                <Fa icon={faChevronRight} />
+              </a>
+            </div>
+
+            <div>
+              <a
+                href={`/stats?title=${encodeURIComponent(prompt.prompt_id)}&id=${prompt.prompt_id}&idshow=${index + 1}`}
+                class="explore-button"
+                on:click|preventDefault={() => {
+                  goto(
+                    `/stats?title=${encodeURIComponent(prompt.prompt_id)}&id=${prompt.prompt_id}&idshow=${index + 1}`
+                  );
+                  setTimeout(() => window.location.reload(), 100);
+                }}
+              >
+                Explore statistics from prompt {index + 1}
+                <Fa icon={faChevronRight} />
+              </a>
+            </div>
           </div>
         </div>
       {/if}
@@ -574,7 +611,7 @@
     display: flex;
     align-items: center;
     gap: 15px;
-    width: calc(65% - 10px);
+    width: calc(75% - 10px);
   "
     >
       <p style="margin: 0; white-space: nowrap;">
@@ -582,7 +619,7 @@
         <span style="color: {getColor($latestProgress)}; font-weight: bold;"
           >{$latestProgress}</span
         >
-        &nbsp &nbsp {$numAnnotated}/250 samples annotated
+        &nbsp &nbsp {$numAnnotated}/250 (50 * 5 runs) samples annotated
       </p>
       <div
         style="
@@ -695,7 +732,7 @@
 
   nav {
     width: 100%;
-    padding: 16px;
+    padding: 16px 16px 16px 0;
     /* border-bottom: 1px solid #e5e7eb; */
     display: flex;
     align-items: center;
@@ -903,7 +940,7 @@
     padding: 16px;
     border-radius: 10px;
     min-width: 200px;
-    max-width: 400px;
+    max-width: 450px;
     box-shadow: 0px 1px 3px rgba(0, 0, 0, 0.1);
     cursor: pointer;
   }

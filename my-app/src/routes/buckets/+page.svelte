@@ -331,15 +331,18 @@
   <nav>
     <!-- Logo -->
     <div class="nav-left">
+      <a href={`../prompts`} style="vertical-align:top; margin:5px 10px 0 0;"
+        ><Fa icon={faChevronLeft} /></a
+      >
       <img src="/imgs/logo.png" alt="AnnotateThis" class="logo" />
-      <h1 style="white-space: nowrap; margin:3% 0% 0% 8%;">
+      <h1 style="vertical-align:top; white-space: nowrap; margin:5px 0 0 12px;">
         Concept Exploration
       </h1>
     </div>
 
     <!-- User -->
     <div class="nav-right">
-      <h1 style="margin:0% 20% 0% 0%;">{get(userName)}</h1>
+      <h1 style="margin:0% 15% 0% 0%;">{get(userName)}</h1>
       <img src="/imgs/user-icon.png" alt="User Icon" class="user-icon" />
     </div>
   </nav>
@@ -376,11 +379,13 @@
 </div>
 
 <section>
-  <div class="top">
-    <!-- <a href={`../prompts`}><Fa icon={faHouse} /> Back to My Prompts </a>
+  <!-- <a href={`../prompts`}><Fa icon={faHouse} /> Back to My Prompts </a>
     <h1>Annotation Examples</h1> -->
-    <p>Prompt {idshow}</p>
-    <p>{formatTimeSubmitted(timeP)}</p>
+  <div class="top">
+    <p>
+      <span style="font-weight:bold">Prompt {idshow} </span>
+      ({formatTimeSubmitted(timeP)})
+    </p>
     <p>{textP}</p>
   </div>
 </section>
@@ -650,7 +655,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    font-size: 18px;
+    /* font-size: 18px; */
   }
 
   .nav-left,
