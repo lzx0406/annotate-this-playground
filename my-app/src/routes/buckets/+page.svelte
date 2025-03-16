@@ -55,8 +55,10 @@
   let filteredByBucket = [];
   let initedData = [];
 
-  // Map bucket name to exclusive probability ranges
+  let filteredCopy = [];
+
   const bucketRanges = {
+    All: [0.0, 1.0],
     "Very Likely": [0.8, 1.0], // 0.8 ≤ P ≤ 1.0
     "Somewhat Likely": [0.6, 0.8], // 0.6 ≤ P < 0.8
     "Even Chance": [0.4, 0.6], // 0.4 ≤ P < 0.6
@@ -64,12 +66,11 @@
     "Very Unlikely": [0.0, 0.2], // 0.0 ≤ P < 0.2
   };
 
-  // Ensure `selectedBucket` starts with a valid value
-  let selectedBucket = "Very Likely";
+  let selectedBucket = "All";
 
   function filterByBucket(bucketName) {
     selectedBucket = bucketName;
-    const [minProb, maxProb] = bucketRanges[bucketName] || [0, 1];
+    const [minProb, maxProb] = bucketRanges[bucketName] || [0.0, 1.0];
 
     filteredData = initedData.filter(
       (row) =>
@@ -77,6 +78,8 @@
         row.probability >= minProb &&
         row.probability < maxProb
     );
+
+    filteredCopy = filteredData;
     console.log(
       `Filtered by bucket: ${selectedBucket}, found ${filteredData.length} results`
     );
@@ -122,7 +125,7 @@
 
         return {
           ...row,
-          agreement_display: `${agreementCount}/4 models agree`,
+          agreement_display: `${agreementCount}/4`,
           agreement_score: agreementCount,
         };
       });
@@ -141,6 +144,7 @@
 
     console.log(`Average Agreement Score: ${averageAgreement.toFixed(2)}/4`);
     filteredData = initedData;
+    filteredCopy = filteredData;
   }
 
   function filterBySampleSize(sampleSize) {
@@ -160,6 +164,7 @@
       .sort(() => rng() - 0.5) // Shuffle
       .slice(0, sampleSize); // Limit to sample size
 
+    filteredCopy = filteredData;
     console.log(
       `Applied sample size filter: showing ${filteredData.length} results`
     );
@@ -179,10 +184,12 @@
 
     try {
       // Fetch data from backend
-      const response = await fetch(`/api/getExamples?prompt_id=${id}`);
+      const response = await fetch(
+        `/api/getExamples?prompt_id=${id}&writer_id=${$userId}`
+      );
       if (response.ok) {
         exampleData = await response.json();
-        initData(); // Ensure filtering applies on first load
+        initData();
       } else {
         console.error("Failed to fetch examples");
       }
@@ -213,6 +220,7 @@
   }
 
   const buckets = [
+    { name: "All", color: "#FFFFFF" },
     { name: "Very Likely", color: "#5EE85C" },
     { name: "Somewhat Likely", color: "#BEE85C" },
     { name: "Even Chance", color: "#E8E35C" },
@@ -271,13 +279,51 @@
   }
 
   let expandedRows = writable({});
+  let expandedRowsExp = writable({});
 
-  function toggleExpand(index) {
-    expandedRows.update((rows) => {
-      let newRows = { ...rows }; // Copy object
-      newRows[index] = !newRows[index]; // Toggle state
+  function toggleExpand(index, exps) {
+    exps.update((rows) => {
+      let newRows = { ...rows };
+      newRows[index] = !newRows[index];
       return newRows;
     });
+  }
+
+  // sorting
+  let sortKey = writable(null);
+  let sortOrder = writable(1); // 1 for ascending, -1 for descending
+
+  function sortBy(key) {
+    if ($sortKey === key) {
+      if ($sortOrder === 1) {
+        sortOrder.set(-1);
+      } else if ($sortOrder === -1) {
+        sortKey.set(null); // reset
+        sortOrder.set(null);
+        filteredData = filteredCopy;
+        return;
+      }
+    } else {
+      sortKey.set(key);
+      sortOrder.set(1); // default to ascending on new column selection
+    }
+
+    if ($sortKey) {
+      filteredData = [...filteredData].sort((a, b) => {
+        let aValue = a[key] ?? "";
+        let bValue = b[key] ?? "";
+
+        if (typeof aValue === "boolean") {
+          return $sortOrder * (aValue === bValue ? 0 : aValue ? 1 : -1);
+        }
+
+        if (typeof aValue === "string" && typeof bValue === "string") {
+          return $sortOrder * aValue.localeCompare(bValue);
+        }
+
+        return $sortOrder * (aValue - bValue);
+      });
+    }
   }
 </script>
 
@@ -351,7 +397,9 @@
       <option value={size.num}>{size.name}</option>
     {/each}
   </select>
-  <span style="font-weight: bold;">annotation examples from bucket</span>
+  <span style="font-weight: bold;"
+    >annotation examples from certainty bucket</span
+  >
   <select
     id="showBucket"
     bind:value={selectedBucket}
@@ -394,14 +442,82 @@
             <th style="width: 40%; white-space:normal; max-width: 400px;"
               >Article Text</th
             >
-            <th style="width: 5%;">Predicted Value</th>
+
+            <th class="sortable" on:click={() => sortBy("predicted_value")}>
+              <div class="header-content">
+                Run 1 Predicted Value
+                <div class="arrow-container">
+                  <span
+                    class="arrow {$sortKey === 'predicted_value' &&
+                    $sortOrder === 1
+                      ? 'active'
+                      : ''}"
+                  >
+                    ▲
+                  </span>
+                  <span
+                    class="arrow {$sortKey === 'predicted_value' &&
+                    $sortOrder === -1
+                      ? 'active'
+                      : ''}"
+                  >
+                    ▼
+                  </span>
+                </div>
+              </div>
+            </th>
 
             {#if selectedOptions.certainty}
-              <th style="width: 5%; max-width: 100px">Certainty</th>
+              <th class="sortable" on:click={() => sortBy("probability")}>
+                <div class="header-content">
+                  Run 1 Certainty
+                  <div class="arrow-container">
+                    <span
+                      class="arrow {$sortKey === 'probability' &&
+                      $sortOrder === 1
+                        ? 'active'
+                        : ''}"
+                    >
+                      ▲
+                    </span>
+                    <span
+                      class="arrow {$sortKey === 'probability' &&
+                      $sortOrder === -1
+                        ? 'active'
+                        : ''}"
+                    >
+                      ▼
+                    </span>
+                  </div>
+                </div>
+              </th>
             {/if}
 
             {#if selectedOptions.modelConsistency}
-              <th style="width: 5%;max-width: 100px">Model Consistency</th>
+              <!-- Model Consistency -->
+              <th class="sortable" on:click={() => sortBy("agreement_score")}>
+                <div class="header-content">
+                  Model Consistency
+                  <div class="arrow-container">
+                    <span
+                      class="arrow {$sortKey === 'agreement_score' &&
+                      $sortOrder === 1
+                        ? 'active'
+                        : ''}"
+                    >
+                      ▲
+                    </span>
+                    <span
+                      class="arrow {$sortKey === 'agreement_score' &&
+                      $sortOrder === -1
+                        ? 'active'
+                        : ''}"
+                    >
+                      ▼
+                    </span>
+                  </div>
+                </div>
+              </th>
             {/if}
 
             {#if selectedOptions.explanation}
@@ -431,22 +547,12 @@
                   {row.article_url.slice(28, 60)}
                 </a>
               </td>
-              <!-- <td style="width: 40%; white-space:wrap; max-width: 500px;"
-                >{row.text}</td
-              > -->
               <td
                 style="display:flex; flex-direction:row"
-                on:click={() => toggleExpand(i)}
+                on:click={() => toggleExpand(i, expandedRows)}
               >
-                <!-- <button
-                  on:click={() => toggleExpand(i)}
-                  style="border: none; background: none; color: blue; cursor: pointer;"
-                >
-                  {$expandedRows[i] ? "Show Less ▲" : "Show More ▼"}
-                </button> -->
-
                 {#if $expandedRows[i]}
-                  <p style="width:100%; white-space:wrap; max-width: 500px;">
+                  <p style="width:100%; white-space:wrap;">
                     <Fa icon={faChevronDown} style="color: #5facf2" /> &nbsp; {row.text}
                   </p>
                 {:else}
@@ -460,7 +566,11 @@
                   </p>
                 {/if}
               </td>
-              <td>{row.predicted_value ? "Yes" : "No"}</td>
+              <td
+                style="font-weight:bold; color: {row.predicted_value
+                  ? '#66bb6a'
+                  : '#ef5350'};">{row.predicted_value ? "Yes" : "No"}</td
+              >
 
               {#if selectedOptions.certainty}
                 {#if row.probability !== undefined}
@@ -484,15 +594,33 @@
               {/if}
 
               {#if selectedOptions.modelConsistency}
-                <td
-                  >{row.agreement_display} models agree with {row.predicted_value
-                    ? "Yes"
-                    : "No"}</td
+                <td style="font-weight:bold"
+                  >{row.agreement_display} next runs agree with
+                  <span
+                    style="color: {row.predicted_value ? '#66bb6a' : '#ef5350'}"
+                    >{row.predicted_value ? "Yes" : "No"}</span
+                  ></td
                 >
               {/if}
 
               {#if selectedOptions.explanation}
-                <td>{row.explanation}</td>
+                <td
+                  style="display:flex; flex-direction:row"
+                  on:click={() => toggleExpand(i, expandedRowsExp)}
+                >
+                  {#if $expandedRowsExp[i]}
+                    <p style="width:100%; white-space:wrap">
+                      <Fa icon={faChevronDown} style="color: #5facf2" /> &nbsp; {row.explanation}
+                    </p>
+                  {:else}
+                    <p
+                      style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
+                    >
+                      <Fa icon={faChevronRight} style="color: #5facf2" /> &nbsp;
+                      {row.explanation.slice(0, 100)}
+                    </p>
+                  {/if}
+                </td>
               {/if}
             </tr>
           {/each}
@@ -693,5 +821,34 @@
   .checkbox-group-c:checked {
     background-color: #7eb7f5;
     color: white;
+  }
+
+  .sortable {
+    cursor: pointer;
+  }
+
+  .header-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+  }
+
+  .arrow-container {
+    display: flex;
+    flex-direction: column;
+    line-height: 1;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .arrow {
+    font-size: 10px;
+    color: gray;
+    transition: color 0.2s;
+  }
+
+  .active {
+    color: black;
   }
 </style>

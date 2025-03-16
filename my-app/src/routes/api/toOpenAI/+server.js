@@ -14,6 +14,7 @@ import {
   userName,
   prompts,
   latestProgress,
+  numAnnotated,
 } from "$lib/stores";
 import { faQuestion } from "@fortawesome/free-solid-svg-icons";
 
@@ -73,10 +74,12 @@ function parseResponse(responseText) {
   const g1Match = responseText.match(/G1:\s*(.+)/i);
   const p1Match = responseText.match(/P1:\s*([\d.]+)/i);
   const confidenceMatch = responseText.match(/Confidence:\s*(.+)/i);
+  const explanationMatch = responseText.match(/Explanation:\s*(.+)/i);
 
   let g1Answer = "false"; // Default value
   let probability = null;
   let confidence = null;
+  let explanation = null;
 
   if (g1Match) {
     g1Answer = g1Match[1].trim().toLowerCase();
@@ -97,10 +100,14 @@ function parseResponse(responseText) {
   }
 
   if (confidenceMatch) {
-    confidence = confidenceMatch[1].trim(); // Extract verbal confidence
+    confidence = confidenceMatch[1].trim();
   }
 
-  return { prediction: g1Answer, probability, confidence };
+  if (explanationMatch) {
+    explanation = explanationMatch[1].trim();
+  }
+
+  return { prediction: g1Answer, probability, confidence, explanation };
 }
 
 /**
@@ -264,6 +271,8 @@ export async function POST({ request }) {
     // );
 
     latestProgress.set("annotating");
+    let progressCounter = 0;
+    numAnnotated.set(progressCounter.toString());
 
     for (
       let perturbation_index = 0;
@@ -298,6 +307,7 @@ export async function POST({ request }) {
         let predicted_value;
         let probability;
         let confidence;
+        let explanation;
 
         // Construct the base prompt with video and comment information
         const concat_sys =
@@ -332,6 +342,7 @@ export async function POST({ request }) {
             predicted_value = parsedResult.prediction;
             probability = parsedResult.probability;
             confidence = parsedResult.confidence;
+            explanation = parsedResult.explanation;
             retries = 0;
 
             // Check if choices array is present
@@ -378,17 +389,20 @@ export async function POST({ request }) {
         const booleanPredictedValue = predicted_value === "true" ? 1 : 0;
 
         await connection.query(
-          `INSERT INTO Annotation (true_value, predicted_value, probability, confidence, article_id, prompt_id, perturbation_index) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO Annotation (true_value, predicted_value, probability, confidence, explanation, article_id, prompt_id, perturbation_index) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             true_value,
             booleanPredictedValue,
             probability,
             confidence,
+            explanation,
             articleId,
             newPromptId,
             perturbation_index,
           ]
         );
+        progressCounter += 1;
+        numAnnotated.set(progressCounter.toString());
         console.log(
           "INSERTED:true" +
             true_value +
@@ -399,8 +413,12 @@ export async function POST({ request }) {
             probability +
             " conf: " +
             confidence +
+            " exp: " +
+            explanation +
             " perturb id: " +
-            perturbation_index
+            perturbation_index +
+            "counter: " +
+            get(numAnnotated)
         );
       }
     }
@@ -432,7 +450,10 @@ export async function POST({ request }) {
 }
 
 export async function GET() {
-  return new Response(JSON.stringify({ progress: get(latestProgress) }), {
-    status: 200,
-  });
+  return new Response(
+    JSON.stringify({ progress: get(latestProgress), count: get(numAnnotated) }),
+    {
+      status: 200,
+    }
+  );
 }

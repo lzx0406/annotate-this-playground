@@ -44,3 +44,4 @@ export const latestProgress = persistentStore(
   "latestProgress",
   "waiting for annotation task"
 );
+export const numAnnotated = persistentStore("numAnnotated", null);

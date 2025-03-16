@@ -25,6 +25,7 @@
     userName,
     prompts,
     latestProgress,
+    numAnnotated,
   } from "$lib/stores";
 
   let promptList = [];
@@ -35,6 +36,7 @@
   let interval;
   console.log("GETTT waiting for annotation:" + $waitingForAnnotation);
   console.log("GETTT Latest:" + $latestProgress);
+  console.log("GETTT numAnnn:" + $numAnnotated);
 
   let showPopup = false;
   let newAddingPrompt;
@@ -43,10 +45,6 @@
     if (!get(userId) || !get(userName)) {
       logout();
     }
-  });
-
-  // Fetch past prompts for the logged-in user on component mount
-  onMount(() => {
     fetchPastPrompts();
   });
 
@@ -66,6 +64,7 @@
       console.log("AFTER REFRESH got YES still annotating");
     } else {
       waitingForAnnotation.set(false);
+      numAnnotated.set("0");
       console.log("AFTER REFRESH NOT still annotating");
     }
   });
@@ -173,9 +172,9 @@
 
     1.0) for the following question. Give ONLY the guesses, probabilities and describe how likely it is
 
-    that your guess is correct as one of the following expressions: ${EXPRESSION_LIST}. 
+    that your guess is correct as one of the following expressions: ${EXPRESSION_LIST}, and include an explanation only after specifying "Explanation:" in the end. 
 
-    No other words or explanation. For example:\n\nG1: <first most likely guess, Yes or No answer to the question!>\n\nP1: <the probability between
+    For example:\n\nG1: <first most likely guess, Yes or No answer to the question!>\n\nP1: <the probability between
 
     0.0 and 1.0 that G1 is correct, without any extra commentary whatsoever; just
 
@@ -185,7 +184,7 @@
 
     probability!>\nConfidence: <description of confidence, without any extra
 
-    commentary whatsoever; just a short phrase!>\ \n`;
+    commentary whatsoever; just a short phrase!>\nExplanation: <include your explanation here.> \n`;
 
   function splitData(data) {
     const total = data.length;
@@ -202,6 +201,7 @@
 
   async function sendPrompt(question) {
     latestProgress.set("pending");
+    numAnnotated.set("0");
     console.log("Got the question" + question);
     showPopup = false;
     const startTimestamp = Date.now();
@@ -263,11 +263,13 @@
         console.error("Failed to send data to OpenAI");
         waitingForAnnotation.set(false);
         latestProgress.set("error sending data to OpenAI");
+        numAnnotated.set("0");
       }
     } catch (error) {
       console.error("Error sending data to OpenAI:", error);
       waitingForAnnotation.set(false);
       latestProgress.set("error sending data to OpenAI");
+      numAnnotated.set("0");
     }
   }
 
@@ -281,6 +283,10 @@
           console.log("UPDATED LATEST PROGRESS to:", get(latestProgress));
           console.log("waiting for annotation??", get(waitingForAnnotation));
           console.log("current pending prompt:" + get(pendingPrompt));
+
+          if (get(latestProgress) === "annotating" && !numAnnotatedPolling) {
+            startNumAnnotatedPolling();
+          }
         } else {
           console.error("Failed to fetch progress");
         }
@@ -289,13 +295,57 @@
       }
     }, 10000); // Poll every 10 seconds
 
-    return () => clearInterval(interval); // Cleanup on component unmount
+    // return () => clearInterval(interval); // Cleanup on component unmount
+
+    // Store interval ID for numAnnotated polling
+    let numAnnotatedPolling = null;
+
+    function startNumAnnotatedPolling() {
+      if (numAnnotatedPolling) return; // Avoid duplicate polling
+
+      console.log("Starting numAnnotated polling...");
+      numAnnotatedPolling = setInterval(async () => {
+        try {
+          const response = await fetch("/api/toOpenAI");
+          if (response.ok) {
+            const { count } = await response.json();
+            numAnnotated.set(count);
+            console.log("UPDATED NUM ANNOTATED to:", get(numAnnotated));
+          } else {
+            console.error("Failed to fetch numAnnotated");
+          }
+
+          // Stop polling if annotation process is completed
+          if (get(latestProgress) !== "annotating") {
+            stopNumAnnotatedPolling();
+          }
+        } catch (error) {
+          console.error("Error fetching numAnnotated:", error);
+        }
+      }, 3000); // Poll every 3 seconds
+    }
+
+    function stopNumAnnotatedPolling() {
+      if (numAnnotatedPolling) {
+        clearInterval(numAnnotatedPolling);
+        numAnnotatedPolling = null;
+        console.log("Stopped numAnnotated polling.");
+      }
+    }
+
+    onDestroy(() => {
+      clearInterval(progressInterval);
+      stopNumAnnotatedPolling();
+    });
   });
 
   $: {
-    if ($latestProgress === "annotation completed") {
+    if (
+      $latestProgress === "annotation completed" ||
+      $latestProgress === "error sending data to OpenAI"
+    ) {
       // Annotation is done, so clear the pending prompt and refresh data.
-      console.log("CHANGE IN latest to ANNO COMP");
+      console.log("CHANGE IN latest to ANNO COMP, or got error");
       waitingForAnnotation.set(false);
       pendingPrompt.set(null);
       fetchPastPrompts();
@@ -532,7 +582,7 @@
         <span style="color: {getColor($latestProgress)}; font-weight: bold;"
           >{$latestProgress}</span
         >
-        &nbsp &nbsp 200/200 samples annotated
+        &nbsp &nbsp {$numAnnotated}/250 samples annotated
       </p>
       <div
         style="
@@ -545,7 +595,7 @@
       >
         <div
           style="
-        width: {$latestProgress}%;
+        width: {($numAnnotated / 250) * 100}%;
         background-color: #66bb6a;
         height: 100%;
       "
