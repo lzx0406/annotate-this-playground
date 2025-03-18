@@ -43,6 +43,18 @@
   let chartInstance, chartBucket;
   let chartCanvas, chartCanvasBucket;
   Chart.register(...registerables);
+  let selectedRun = "Aggregated";
+
+  let selectedOptions = {
+    runs5: false,
+    buckets5: false,
+    explanation: false,
+  };
+
+  function toggleOption(option) {
+    selectedOptions[option] = !selectedOptions[option];
+    console.log("Updated selected options:", selectedOptions);
+  }
 
   const query = $page.url.searchParams;
   const title = query.get("title");
@@ -97,6 +109,132 @@
     }
   });
 
+  function renderChartBucket() {
+    if (!exampleData.length) return;
+
+    let uncertaintyBuckets = {
+      "Very Likely": { yes: 0, no: 0 },
+      "Somewhat Likely": { yes: 0, no: 0 },
+      "Even Chance": { yes: 0, no: 0 },
+      "Somewhat Unlikely": { yes: 0, no: 0 },
+      "Very Unlikely": { yes: 0, no: 0 },
+    };
+
+    if (selectedRun === "Aggregated") {
+      // Aggregate across all runs (average uncertainty)
+      let runCounts = new Array(5).fill(0); // Track number of samples per run
+
+      exampleData.forEach((row) => {
+        if (row.probability !== undefined) {
+          runCounts[row.perturbation_index - 1]++;
+
+          if (row.probability >= 0.8) {
+            row.predicted_value === 1
+              ? uncertaintyBuckets["Very Likely"].yes++
+              : uncertaintyBuckets["Very Likely"].no++;
+          } else if (row.probability >= 0.6) {
+            row.predicted_value === 1
+              ? uncertaintyBuckets["Somewhat Likely"].yes++
+              : uncertaintyBuckets["Somewhat Likely"].no++;
+          } else if (row.probability >= 0.4) {
+            row.predicted_value === 1
+              ? uncertaintyBuckets["Even Chance"].yes++
+              : uncertaintyBuckets["Even Chance"].no++;
+          } else if (row.probability >= 0.2) {
+            row.predicted_value === 1
+              ? uncertaintyBuckets["Somewhat Unlikely"].yes++
+              : uncertaintyBuckets["Somewhat Unlikely"].no++;
+          } else {
+            row.predicted_value === 1
+              ? uncertaintyBuckets["Very Unlikely"].yes++
+              : uncertaintyBuckets["Very Unlikely"].no++;
+          }
+        }
+      });
+
+      // Normalize by the number of runs
+      Object.keys(uncertaintyBuckets).forEach((key) => {
+        uncertaintyBuckets[key].yes /= 5;
+        uncertaintyBuckets[key].no /= 5;
+      });
+    } else {
+      // Filter by selected model run
+      exampleData.forEach((row) => {
+        if (row.perturbation_index === parseInt(selectedRun)) {
+          if (row.probability >= 0.8) {
+            row.predicted_value === 1
+              ? uncertaintyBuckets["Very Likely"].yes++
+              : uncertaintyBuckets["Very Likely"].no++;
+          } else if (row.probability >= 0.6) {
+            row.predicted_value === 1
+              ? uncertaintyBuckets["Somewhat Likely"].yes++
+              : uncertaintyBuckets["Somewhat Likely"].no++;
+          } else if (row.probability >= 0.4) {
+            row.predicted_value === 1
+              ? uncertaintyBuckets["Even Chance"].yes++
+              : uncertaintyBuckets["Even Chance"].no++;
+          } else if (row.probability >= 0.2) {
+            row.predicted_value === 1
+              ? uncertaintyBuckets["Somewhat Unlikely"].yes++
+              : uncertaintyBuckets["Somewhat Unlikely"].no++;
+          } else {
+            row.predicted_value === 1
+              ? uncertaintyBuckets["Very Unlikely"].yes++
+              : uncertaintyBuckets["Very Unlikely"].no++;
+          }
+        }
+      });
+    }
+
+    const labels = Object.keys(uncertaintyBuckets);
+    const yesData = labels.map((label) => uncertaintyBuckets[label].yes);
+    const noData = labels.map((label) => uncertaintyBuckets[label].no);
+
+    if (chartBucket) {
+      chartBucket.destroy();
+    }
+
+    chartBucket = new Chart(chartCanvasBucket.getContext("2d"), {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [
+          {
+            label: "Yes Labels",
+            data: yesData,
+            backgroundColor: "rgba(102, 187, 106, 0.5)", // Green
+            borderColor: "rgba(102, 187, 106, 1)",
+            borderWidth: 2,
+          },
+          {
+            label: "No Labels",
+            data: noData,
+            backgroundColor: "rgba(239, 83, 80, 0.5)", // Red
+            borderColor: "rgba(239, 83, 80, 1)",
+            borderWidth: 2,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          title: {
+            display: true,
+            text: `Label Counts Grouped by Uncertainty (${selectedRun})`,
+          },
+          legend: { position: "top" },
+        },
+        scales: {
+          x: { title: { display: true, text: "Uncertainty Levels" } },
+          y: {
+            title: { display: true, text: "Label Count" },
+            beginAtZero: true,
+          },
+        },
+      },
+    });
+  }
+
   function renderChart() {
     console.log("RENDERING");
     if (!exampleData.length) return;
@@ -142,6 +280,13 @@
         responsive: true,
         plugins: {
           title: { display: true, text: "Label Changes Across 5 Model Runs" },
+          datalabels: {
+            anchor: "end",
+            align: "top",
+            formatter: (value) => value, // Show raw number of instances
+            color: "#000",
+            font: { weight: "bold", size: 14 },
+          },
         },
         scales: {
           x: { title: { display: true, text: "Model Runs" } },
@@ -153,88 +298,7 @@
       },
     });
 
-    // Chart 2 buckets
-    let uncertaintyBuckets = {
-      "Very Likely": { yes: 0, no: 0 },
-      "Somewhat Likely": { yes: 0, no: 0 },
-      "Even Chance": { yes: 0, no: 0 },
-      "Somewhat Unlikely": { yes: 0, no: 0 },
-      "Very Unlikely": { yes: 0, no: 0 },
-    };
-
-    exampleData.forEach((row) => {
-      if (row.perturbation_index === 0) {
-        if (row.probability >= 0.8) {
-          row.predicted_value === 1
-            ? uncertaintyBuckets["Very Likely"].yes++
-            : uncertaintyBuckets["Very Likely"].no++;
-        } else if (row.probability >= 0.6) {
-          row.predicted_value === 1
-            ? uncertaintyBuckets["Somewhat Likely"].yes++
-            : uncertaintyBuckets["Somewhat Likely"].no++;
-        } else if (row.probability >= 0.4) {
-          row.predicted_value === 1
-            ? uncertaintyBuckets["Even Chance"].yes++
-            : uncertaintyBuckets["Even Chance"].no++;
-        } else if (row.probability >= 0.2) {
-          row.predicted_value === 1
-            ? uncertaintyBuckets["Somewhat Unlikely"].yes++
-            : uncertaintyBuckets["Somewhat Unlikely"].no++;
-        } else {
-          row.predicted_value === 1
-            ? uncertaintyBuckets["Very Unlikely"].yes++
-            : uncertaintyBuckets["Very Unlikely"].no++;
-        }
-      }
-    });
-
-    const labels = Object.keys(uncertaintyBuckets);
-    const yesData = labels.map((label) => uncertaintyBuckets[label].yes);
-    const noData = labels.map((label) => uncertaintyBuckets[label].no);
-
-    if (chartBucket) {
-      chartBucket.destroy();
-    }
-
-    chartBucket = new Chart(chartCanvasBucket.getContext("2d"), {
-      type: "bar",
-      data: {
-        labels,
-        datasets: [
-          {
-            label: "Yes Labels",
-            data: yesData,
-            backgroundColor: "rgba(102, 187, 106, 0.8)", // Green
-            borderColor: "rgba(102, 187, 106, 1)",
-            borderWidth: 1,
-          },
-          {
-            label: "No Labels",
-            data: noData,
-            backgroundColor: "rgba(239, 83, 80, 0.8)", // Red
-            borderColor: "rgba(239, 83, 80, 1)",
-            borderWidth: 1,
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        plugins: {
-          title: {
-            display: true,
-            text: "Label Counts Grouped by Uncertainty (First Run)",
-          },
-          legend: { position: "top" },
-        },
-        scales: {
-          x: { title: { display: true, text: "Uncertainty Levels" } },
-          y: {
-            title: { display: true, text: "Label Count" },
-            beginAtZero: true,
-          },
-        },
-      },
-    });
+    renderChartBucket();
   }
 </script>
 
@@ -270,16 +334,89 @@
   </div>
 </section>
 
-<div class="chart-container">
-  <canvas bind:this={chartCanvas}></canvas>
-</div>
-<div class="chart-container">
-  <canvas bind:this={chartCanvasBucket}></canvas>
-</div>
+<section class="chart-button-group">
+  <div class="checkbox-group">
+    <label class="checkbox-group-c">
+      <input
+        type="checkbox"
+        on:change={() => toggleOption("certainty")}
+        bind:checked={selectedOptions.certainty}
+      />
+      Show me how the labels changed across different model runs.
+    </label>
+
+    <label class="checkbox-group-c">
+      <input
+        type="checkbox"
+        on:change={() => toggleOption("modelConsistency")}
+        bind:checked={selectedOptions.modelConsistency}
+      />
+      Show me the uncertainty for all labels.
+    </label>
+
+    <label class="checkbox-group-c">
+      <input
+        type="checkbox"
+        on:change={() => toggleOption("explanation")}
+        bind:checked={selectedOptions.explanation}
+      />
+      Show me a summary of the explanations.
+    </label>
+
+    <label class="checkbox-group-c">
+      <input
+        type="checkbox"
+        on:change={() => toggleOption("explanation")}
+        bind:checked={selectedOptions.explanation}
+      />
+      Show me the relationship between the AI's self-reported certainty and how labels
+      changed over 5 runs.
+    </label>
+
+    <label class="checkbox-group-c">
+      <input
+        type="checkbox"
+        on:change={() => toggleOption("explanation")}
+        bind:checked={selectedOptions.explanation}
+      />
+      Show me a summary of the explanations.
+    </label>
+  </div>
+
+  <div style="width:100%">
+    <div class="chart-container">
+      <canvas bind:this={chartCanvas}></canvas>
+    </div>
+
+    <div class="chart-container">
+      <select
+        bind:value={selectedRun}
+        on:change={renderChartBucket}
+        style="padding: 5px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px;"
+      >
+        <option value="Aggregated">Aggregated (Average of 5 Runs)</option>
+        <option value="0">Run 1</option>
+        <option value="1">Run 2</option>
+        <option value="2">Run 3</option>
+        <option value="3">Run 4</option>
+        <option value="4">Run 5</option>
+      </select>
+      <canvas bind:this={chartCanvasBucket}></canvas>
+    </div>
+  </div>
+</section>
 
 <style>
+  .chart-button-group {
+    display: flex;
+    flex-direction: row;
+    margin: 0 5% 0 5%;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
   .chart-container {
-    width: 80%;
+    width: 100%;
     height: 400px;
     margin: auto;
   }
@@ -339,5 +476,38 @@
   a:active {
     text-decoration: none;
     color: #5facf2;
+  }
+
+  /* checkbox styling */
+  .checkbox-group {
+    width: 30%;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .checkbox-group-c {
+    display: block;
+    text-decoration: none;
+    font-size: 18px;
+    font-weight: bold;
+    padding: 15px 30px;
+    border-radius: 10px; /* Fully rounded */
+    text-align: center;
+    transition: all 0.3s ease;
+    border: 2px solid #7eb7f5;
+    color: #3498db;
+    background-color: transparent;
+  }
+
+  .checkbox-group-c:hover {
+    background-color: #7eb7f5;
+    color: white;
+  }
+
+  .checkbox-group-c:checked {
+    background-color: #7eb7f5;
+    color: white;
   }
 </style>

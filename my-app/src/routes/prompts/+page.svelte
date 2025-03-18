@@ -659,10 +659,6 @@
             <!-- AI is annotating data...  -->
             <span>Time elapsed: {formattedTime}</span>
             <br />
-            <!-- Latest progress in AI annotation:
-            <span style="color: {getColor($latestProgress)}"
-              >{$latestProgress}
-            </span> -->
           </p>
         {/if}
       </div>
