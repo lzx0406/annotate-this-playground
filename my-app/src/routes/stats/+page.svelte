@@ -41,6 +41,8 @@
 
   let exampleData = [];
   let chartInstance, chartBucket;
+  let chartCanvas, chartCanvasBucket;
+  Chart.register(...registerables);
 
   const query = $page.url.searchParams;
   const title = query.get("title");
@@ -68,10 +70,6 @@
     }
     return [textP, timeP];
   }
-
-  Chart.register(...registerables);
-
-  let chartCanvas;
 
   onMount(async () => {
     console.log("MOUNTINGGGGGGG");
@@ -154,6 +152,89 @@
         },
       },
     });
+
+    // Chart 2 buckets
+    let uncertaintyBuckets = {
+      "Very Likely": { yes: 0, no: 0 },
+      "Somewhat Likely": { yes: 0, no: 0 },
+      "Even Chance": { yes: 0, no: 0 },
+      "Somewhat Unlikely": { yes: 0, no: 0 },
+      "Very Unlikely": { yes: 0, no: 0 },
+    };
+
+    exampleData.forEach((row) => {
+      if (row.perturbation_index === 0) {
+        if (row.probability >= 0.8) {
+          row.predicted_value === 1
+            ? uncertaintyBuckets["Very Likely"].yes++
+            : uncertaintyBuckets["Very Likely"].no++;
+        } else if (row.probability >= 0.6) {
+          row.predicted_value === 1
+            ? uncertaintyBuckets["Somewhat Likely"].yes++
+            : uncertaintyBuckets["Somewhat Likely"].no++;
+        } else if (row.probability >= 0.4) {
+          row.predicted_value === 1
+            ? uncertaintyBuckets["Even Chance"].yes++
+            : uncertaintyBuckets["Even Chance"].no++;
+        } else if (row.probability >= 0.2) {
+          row.predicted_value === 1
+            ? uncertaintyBuckets["Somewhat Unlikely"].yes++
+            : uncertaintyBuckets["Somewhat Unlikely"].no++;
+        } else {
+          row.predicted_value === 1
+            ? uncertaintyBuckets["Very Unlikely"].yes++
+            : uncertaintyBuckets["Very Unlikely"].no++;
+        }
+      }
+    });
+
+    const labels = Object.keys(uncertaintyBuckets);
+    const yesData = labels.map((label) => uncertaintyBuckets[label].yes);
+    const noData = labels.map((label) => uncertaintyBuckets[label].no);
+
+    if (chartBucket) {
+      chartBucket.destroy();
+    }
+
+    chartBucket = new Chart(chartCanvasBucket.getContext("2d"), {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [
+          {
+            label: "Yes Labels",
+            data: yesData,
+            backgroundColor: "rgba(102, 187, 106, 0.8)", // Green
+            borderColor: "rgba(102, 187, 106, 1)",
+            borderWidth: 1,
+          },
+          {
+            label: "No Labels",
+            data: noData,
+            backgroundColor: "rgba(239, 83, 80, 0.8)", // Red
+            borderColor: "rgba(239, 83, 80, 1)",
+            borderWidth: 1,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          title: {
+            display: true,
+            text: "Label Counts Grouped by Uncertainty (First Run)",
+          },
+          legend: { position: "top" },
+        },
+        scales: {
+          x: { title: { display: true, text: "Uncertainty Levels" } },
+          y: {
+            title: { display: true, text: "Label Count" },
+            beginAtZero: true,
+          },
+        },
+      },
+    });
   }
 </script>
 
@@ -191,6 +272,9 @@
 
 <div class="chart-container">
   <canvas bind:this={chartCanvas}></canvas>
+</div>
+<div class="chart-container">
+  <canvas bind:this={chartCanvasBucket}></canvas>
 </div>
 
 <style>
