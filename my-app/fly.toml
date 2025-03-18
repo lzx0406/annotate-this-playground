@@ -16,6 +16,9 @@ primary_region = 'ord'
   min_machines_running = 0
   processes = ['app']
 
+[env]
+  BODY_SIZE_LIMIT = 5500000
+  
 [[vm]]
   memory = '2gb'
   cpu_kind = 'shared'

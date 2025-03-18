@@ -28,13 +28,6 @@
   } from "$lib/stores";
   let promptList = [];
   let exampleData = [];
-  // let exampleData = writable([]);
-
-  // Subscribe to the store
-  // $: prompts.subscribe((/** @type {any[]} */ value) => {
-  //   console.log("Current prompts:", value);
-  //   promptList = value;
-  // });
 
   const query = $page.url.searchParams;
   const title = query.get("title");
@@ -417,20 +410,6 @@
   </select>
 </div>
 
-<!-- <div style="display: flex; align-items: center; gap: 8px; margin: 0 5% 0 5%;">
-  <label for="sortAgree" style="font-weight: bold;">Sort by</label>
-  <select
-    id="sortAgree"
-    bind:value={sampleSize}
-    on:change={() => sortByAgreement()}
-    style="padding: 5px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px;"
-  >
-    {#each sampleSizes as size}
-      <option value={size.num}>{size.name}</option>
-    {/each}
-  </select>
-</div> -->
-
 <section>
   <div class="all-data">
     <!-- <h2>
@@ -658,29 +637,19 @@
     /* font-size: 18px; */
   }
 
+  nav {
+    width: 100%;
+    padding: 16px 16px 16px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
   .nav-left,
   .nav-center,
   .nav-right {
     display: flex;
     align-items: center;
-  }
-
-  .nav-center a {
-    margin: 0 12px;
-    text-decoration: none;
-    color: #6b7280;
-    font-weight: 500;
-  }
-
-  .nav-center a:first-child {
-    color: #1f2937;
-    font-weight: 700;
-  }
-
-  .nav-right span {
-    font-weight: 700;
-    color: #1f2937;
-    margin-right: 8px;
   }
 
   .logo {

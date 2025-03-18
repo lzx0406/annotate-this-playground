@@ -65,7 +65,7 @@
   }
 </script>
 
-<section>Tutorial on page</section>
+<section>Tutorial on page - Not yet updated</section>
 <section>
   <div class="top">
     <h3>Instructions</h3>

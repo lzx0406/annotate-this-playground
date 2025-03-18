@@ -561,7 +561,7 @@
                   setTimeout(() => window.location.reload(), 100); // Force refresh after navigation
                 }}
               >
-                Explore annotations from prompt {index + 1}
+                Annotations from prompt {index + 1}
                 <Fa icon={faChevronRight} />
               </a>
             </div>
@@ -577,7 +577,7 @@
                   setTimeout(() => window.location.reload(), 100);
                 }}
               >
-                Explore statistics from prompt {index + 1}
+                Statistics from prompt {index + 1}
                 <Fa icon={faChevronRight} />
               </a>
             </div>
