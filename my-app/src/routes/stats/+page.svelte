@@ -19,6 +19,7 @@
     faToggleOff,
     faChevronDown,
   } from "@fortawesome/free-solid-svg-icons";
+  import { tick } from "svelte";
 
   import {
     selectedAnnotationType,
@@ -38,24 +39,49 @@
     Legend,
     registerables,
   } from "chart.js";
+  // import WordCloud from "wordcloud";
+
+  let wordCloudCanvas;
 
   let exampleData = [];
   let chartInstance, chartBucket;
   let chartCanvas, chartCanvasBucket;
   Chart.register(...registerables);
   let selectedRun = "Aggregated";
+  let summary = writable("Waiting for AI summary...");
+  let explanationText = writable([]); // explanations for word analysis
+  let wordFrequency = writable([]);
 
   let selectedOptions = {
     runs5: false,
     buckets5: false,
-    explanation: false,
+    summary: false,
+    certaintyAgree: false,
+    allPromptsBucket: false,
   };
+
+  // function toggleOption(option) {
+  //   selectedOptions[option] = !selectedOptions[option];
+  //   console.log("Updated selected options:", selectedOptions);
+  // }
 
   function toggleOption(option) {
     selectedOptions[option] = !selectedOptions[option];
     console.log("Updated selected options:", selectedOptions);
-  }
 
+    // Wait for the DOM to update before trying to access canvases
+    tick().then(() => {
+      if (option === "runs5" && selectedOptions.runs5) {
+        renderChart();
+      }
+      if (option === "buckets5" && selectedOptions.buckets5) {
+        renderChartBucket();
+      }
+      if (option === "summary" && selectedOptions.summary) {
+        summarizeExplanations();
+      }
+    });
+  }
   const query = $page.url.searchParams;
   const title = query.get("title");
   const id = query.get("id");
@@ -100,16 +126,170 @@
       );
       if (response.ok) {
         exampleData = await response.json();
-        renderChart();
+        console.log(
+          "Debug: exampleData JUST GOT in stats:",
+          exampleData.slice(0, 5)
+        );
+        // renderChart();
       } else {
         console.error("Failed to fetch examples");
       }
     } catch (error) {
       console.error("Error fetching examples:", error);
     }
+
+    if (typeof window !== "undefined") {
+      const WordCloud = (await import("wordcloud")).default;
+
+      const explanations = exampleData
+        .map((ex) => ex.explanation)
+        .filter((ex) => ex !== null && ex !== undefined && ex.trim() !== ""); // Remove empty values
+      explanationText.set(explanations);
+      computeWordFrequency(explanations);
+
+      renderWordCloud();
+    }
   });
 
-  function renderChartBucket() {
+  async function summarizeExplanations() {
+    await tick();
+
+    if (exampleData.length === 0) {
+      summary.set("No data available for summarization.");
+      return;
+    }
+    console.log("Debug: exampleData before sending:", exampleData.slice(0, 5));
+
+    if (get(summary) !== "Waiting for AI summary...") {
+      console.log("Summary already generated. Skipping summarization.");
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/getSummary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ examples: exampleData }),
+      });
+
+      if (response.ok) {
+        const { summary: generatedSummary } = await response.json();
+        summary.set(generatedSummary);
+      } else {
+        summary.set("Failed to summarize explanations.");
+      }
+    } catch (error) {
+      summary.set("Error fetching summary.");
+      console.error("Error:", error);
+    }
+  }
+
+  const STOPWORDS = new Set([
+    "the",
+    "and",
+    "which",
+    "that",
+    "this",
+    "with",
+    "from",
+    "for",
+    "was",
+    "are",
+    "but",
+    "not",
+    "you",
+    "your",
+    "have",
+    "has",
+    "had",
+    "they",
+    "their",
+    "there",
+    "can",
+    "will",
+    "would",
+    "should",
+    "could",
+    "about",
+    "after",
+    "before",
+    "because",
+    "so",
+    "while",
+    "what",
+    "when",
+    "where",
+    "who",
+    "how",
+    "why",
+    "some",
+    "more",
+    "most",
+    "any",
+    "all",
+    "just",
+    "been",
+    "being",
+    "into",
+    "between",
+    "upon",
+    "out",
+    "very",
+    "also",
+    "own",
+    "those",
+    "these",
+    "other",
+    "such",
+    "only",
+    "even",
+  ]);
+
+  function computeWordFrequency(explanations) {
+    const wordCount = {};
+
+    explanations.forEach((text) => {
+      const words = text
+        .toLowerCase()
+        .replace(/[^a-zA-Z\s]/g, "") // Remove punctuation
+        .split(/\s+/) // Split by whitespace
+        .filter((word) => word.length > 2 && !STOPWORDS.has(word)); // Remove stopwords
+
+      words.forEach((word) => {
+        wordCount[word] = (wordCount[word] || 0) + 1;
+      });
+    });
+
+    // Sort words by frequency (descending)
+    const sortedWords = Object.entries(wordCount)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 15); // Show top 15 words
+
+    console.log("Top word frequencies (without stopwords):", sortedWords);
+    wordFrequency.set(sortedWords);
+  }
+
+  function renderWordCloud() {
+    if (!$wordFrequency.length) return;
+
+    const words = $wordFrequency.map(([word, count]) => [word, count * 10]); // Scale frequency
+
+    WordCloud(wordCloudCanvas, {
+      list: words,
+      gridSize: 10,
+      weightFactor: 3,
+      fontFamily: "Poppins",
+      color: "random-dark",
+      backgroundColor: "#fff",
+      rotateRatio: 0.5,
+      minSize: 10,
+    });
+
+    console.log("Word Cloud Rendered");
+  }
+
+  async function renderChartBucket() {
+    await tick();
     if (!exampleData.length) return;
 
     let uncertaintyBuckets = {
@@ -339,8 +519,8 @@
     <label class="checkbox-group-c">
       <input
         type="checkbox"
-        on:change={() => toggleOption("certainty")}
-        bind:checked={selectedOptions.certainty}
+        on:change={() => toggleOption("runs5")}
+        bind:checked={selectedOptions.runs5}
       />
       Show me how the labels changed across different model runs.
     </label>
@@ -348,8 +528,8 @@
     <label class="checkbox-group-c">
       <input
         type="checkbox"
-        on:change={() => toggleOption("modelConsistency")}
-        bind:checked={selectedOptions.modelConsistency}
+        on:change={() => toggleOption("buckets5")}
+        bind:checked={selectedOptions.buckets5}
       />
       Show me the uncertainty for all labels.
     </label>
@@ -357,8 +537,8 @@
     <label class="checkbox-group-c">
       <input
         type="checkbox"
-        on:change={() => toggleOption("explanation")}
-        bind:checked={selectedOptions.explanation}
+        on:change={() => toggleOption("summary")}
+        bind:checked={selectedOptions.summary}
       />
       Show me a summary of the explanations.
     </label>
@@ -366,8 +546,8 @@
     <label class="checkbox-group-c">
       <input
         type="checkbox"
-        on:change={() => toggleOption("explanation")}
-        bind:checked={selectedOptions.explanation}
+        on:change={() => toggleOption("certaintyAgree")}
+        bind:checked={selectedOptions.certaintyAgree}
       />
       Show me the relationship between the AI's self-reported certainty and how labels
       changed over 5 runs.
@@ -376,33 +556,96 @@
     <label class="checkbox-group-c">
       <input
         type="checkbox"
-        on:change={() => toggleOption("explanation")}
-        bind:checked={selectedOptions.explanation}
+        on:change={() => toggleOption("allPromptsBucket")}
+        bind:checked={selectedOptions.allPromptsBucket}
       />
-      Show me a summary of the explanations.
+      Show me the percentages of examples that fall into each bucket across all prompts.
     </label>
   </div>
 
   <div style="width:100%">
-    <div class="chart-container">
-      <canvas bind:this={chartCanvas}></canvas>
-    </div>
+    {#if !selectedOptions.runs5 && !selectedOptions.buckets5 && !selectedOptions.summary && !selectedOptions.certaintyAgree && !selectedOptions.allPromptsBucket}
+      <h3 class="chart-container">&larr; click on a button to see summary</h3>
+    {/if}
+    {#if selectedOptions.runs5}
+      <div class="chart-container">
+        <h3>Label changes across model runs</h3>
+        <canvas bind:this={chartCanvas}></canvas>
+      </div>
+    {/if}
 
-    <div class="chart-container">
-      <select
-        bind:value={selectedRun}
-        on:change={renderChartBucket}
-        style="padding: 5px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px;"
-      >
-        <option value="Aggregated">Aggregated (Average of 5 Runs)</option>
-        <option value="0">Run 1</option>
-        <option value="1">Run 2</option>
-        <option value="2">Run 3</option>
-        <option value="3">Run 4</option>
-        <option value="4">Run 5</option>
-      </select>
-      <canvas bind:this={chartCanvasBucket}></canvas>
-    </div>
+    {#if selectedOptions.buckets5}
+      <div class="chart-container">
+        <h3>Uncertainty for all labels</h3>
+        <select
+          bind:value={selectedRun}
+          on:change={renderChartBucket}
+          style="padding: 5px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px;"
+        >
+          <option value="Aggregated">Aggregated (Average of 5 Runs)</option>
+          <option value="0">Run 1</option>
+          <option value="1">Run 2</option>
+          <option value="2">Run 3</option>
+          <option value="3">Run 4</option>
+          <option value="4">Run 5</option>
+        </select>
+        <canvas bind:this={chartCanvasBucket}></canvas>
+      </div>
+    {/if}
+
+    <!-- {#if selectedOptions.summary}
+      <div class="chart-container">
+        <h3>AI Summary</h3>
+        <p>{$summary}</p>
+      </div>
+    {/if} -->
+    {#if selectedOptions.summary}
+      <div class="chart-container">
+        <h3>AI Summary</h3>
+        <p>{$summary}</p>
+      </div>
+
+      {#if $wordFrequency.length > 0}
+        <div class="chart-container">
+          <h3>Most Frequent Words in Explanations</h3>
+          <table class="styled-table">
+            <thead>
+              <tr>
+                <th>Word</th>
+                <th>Frequency</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each $wordFrequency as [word, count]}
+                <tr>
+                  <td>{word}</td>
+                  <td>{count}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+        <div class="chart-container">
+          <h3>Word Cloud</h3>
+          <canvas bind:this={wordCloudCanvas}></canvas>
+        </div>
+      {/if}
+    {/if}
+
+    {#if selectedOptions.certaintyAgree}
+      <div class="chart-container">
+        <h3>
+          The relationship between AI's self-reported certainty & how labels
+          change over 5 runs
+        </h3>
+      </div>
+    {/if}
+
+    {#if selectedOptions.allPromptsBucket}
+      <div class="chart-container">
+        <h3>The percentages of examples in each bucket from all prompts</h3>
+      </div>
+    {/if}
   </div>
 </section>
 
@@ -416,8 +659,7 @@
   }
 
   .chart-container {
-    width: 100%;
-    height: 400px;
+    width: 90%;
     margin: auto;
   }
   .top {

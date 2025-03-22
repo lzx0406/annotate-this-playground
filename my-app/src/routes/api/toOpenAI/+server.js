@@ -16,7 +16,6 @@ import {
   latestProgress,
   numAnnotated,
 } from "$lib/stores";
-import { faQuestion } from "@fortawesome/free-solid-svg-icons";
 
 // Set the OpenAI API key
 const apiKey = "";
@@ -28,46 +27,6 @@ const openai = new OpenAI({
 /**
  * @param {string} responseText
  */
-// function parseResponse(responseText) {
-//   console.log(responseText);
-//   const firstWord = responseText.trim().toLowerCase().split(/\s+/)[0]; // Get the first word
-
-//   if (["yes", "true", "1"].includes(firstWord)) {
-//     return "true";
-//   } else if (["no", "false", "0", "vague"].includes(firstWord)) {
-//     return "false";
-//   } else {
-//     console.warn(
-//       `Warning: Unexpected response format: '${responseText}'. Expected first word to be 'Yes' or 'No'. Defaulting to 'false'.`
-//     );
-//     return "false";
-//   }
-// }
-
-// function parseResponse(responseText) {
-//   console.log(responseText);
-
-//   const g1Match = responseText.match(/G1:\s*(.+)/i);
-
-//   if (g1Match) {
-//     const g1Answer = g1Match[1].trim().toLowerCase();
-
-//     if (["yes", "true", "1"].includes(g1Answer)) {
-//       return "true";
-//     } else if (["no", "false", "0", "vague"].includes(g1Answer)) {
-//       return "false";
-//     } else {
-//       console.warn(
-//         `Warning: G1 answer '${g1Answer}' is unexpected. Expected 'Yes' or 'No'. Defaulting to 'false'.`
-//       );
-//       return "false";
-//     }
-//   } else {
-//     console.warn(`Warning: G1 not found in response. Defaulting to 'false'.`);
-//     return "false";
-//   }
-// }
-
 function parseResponse(responseText) {
   console.log(responseText);
 
@@ -332,7 +291,7 @@ export async function POST({ request }) {
               model: "gpt-4o-mini-2024-07-18",
               // @ts-ignore
               messages: messages,
-              temperature: 0.7, //Set temp to 0.7
+              temperature: 0.7,
             });
 
             // @ts-ignore
