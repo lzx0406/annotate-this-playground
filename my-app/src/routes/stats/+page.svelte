@@ -51,6 +51,7 @@
   let summary = writable("Waiting for AI summary...");
   let explanationText = writable([]); // explanations for word analysis
   let wordFrequency = writable([]);
+  let uncertaintyData = [];
 
   let selectedOptions = {
     runs5: false,
@@ -79,6 +80,12 @@
       }
       if (option === "summary" && selectedOptions.summary) {
         summarizeExplanations();
+      }
+      if (option === "certaintyAgree" && selectedOptions.certaintyAgree) {
+        updateTable();
+      }
+      if (option === "allPromptsBucket" && selectedOptions.allPromptsBucket) {
+        renderUncertaintyTrendsChart();
       }
     });
   }
@@ -138,19 +145,183 @@
       console.error("Error fetching examples:", error);
     }
 
-    if (typeof window !== "undefined") {
-      const WordCloud = (await import("wordcloud")).default;
+    // if (typeof window !== "undefined") {
+    //   const WordCloud = (await import("wordcloud")).default;
 
-      const explanations = exampleData
-        .map((ex) => ex.explanation)
-        .filter((ex) => ex !== null && ex !== undefined && ex.trim() !== ""); // Remove empty values
-      explanationText.set(explanations);
-      computeWordFrequency(explanations);
+    const explanations = exampleData
+      .map((ex) => ex.explanation)
+      .filter((ex) => ex !== null && ex !== undefined && ex.trim() !== ""); // Remove empty values
+    explanationText.set(explanations);
+    computeWordFrequency(explanations);
 
-      renderWordCloud();
+    //   renderWordCloud();
+    // }
+
+    // Getting all the prompt data for the 5th chart
+    console.log("Fetching uncertainty data for all prompts...");
+
+    const userIdValue = get(userId);
+    const allPrompts = get(prompts);
+
+    if (!userIdValue || !allPrompts.length) {
+      console.error("User ID or prompts data missing.");
+      return;
     }
+
+    let promptUncertainty = {}; // Stores bucket counts per prompt
+
+    for (const prompt of allPrompts) {
+      try {
+        // Fetch all perturbations of this prompt
+        const response = await fetch(
+          `/api/getExamples?prompt_id=${prompt.prompt_id}&writer_id=${userIdValue}`
+        );
+        if (response.ok) {
+          const perturbations = await response.json();
+          console.log(
+            `Fetched ${perturbations.length} perturbations for prompt ${prompt.prompt_id}`
+          );
+
+          // Initialize buckets
+          let buckets = {
+            "Very Likely": 0,
+            "Somewhat Likely": 0,
+            "Even Chance": 0,
+            "Somewhat Unlikely": 0,
+            "Very Unlikely": 0,
+          };
+
+          let totalAnnotations = 0;
+
+          // Aggregate all perturbation data
+          perturbations.forEach((row) => {
+            let bucket;
+            if (row.probability >= 0.8) bucket = "Very Likely";
+            else if (row.probability >= 0.6) bucket = "Somewhat Likely";
+            else if (row.probability >= 0.4) bucket = "Even Chance";
+            else if (row.probability >= 0.2) bucket = "Somewhat Unlikely";
+            else bucket = "Very Unlikely";
+
+            buckets[bucket]++;
+            totalAnnotations++;
+          });
+
+          // Normalize bucket proportions
+          Object.keys(buckets).forEach((bucket) => {
+            if (totalAnnotations > 0) {
+              buckets[bucket] = (buckets[bucket] / totalAnnotations) * 100;
+            }
+          });
+
+          promptUncertainty[prompt.prompt_id] = buckets;
+        } else {
+          console.error(
+            `Failed to fetch perturbations for prompt ${prompt.prompt_id}`
+          );
+        }
+      } catch (error) {
+        console.error("Error fetching perturbations:", error);
+      }
+    }
+
+    uncertaintyData = Object.entries(promptUncertainty).map(
+      ([promptId, bucketData]) => ({
+        promptId,
+        ...bucketData,
+      })
+    );
+
+    console.log("Final Uncertainty Data:", uncertaintyData.slice(0, 5)); // Debugging print
+    renderUncertaintyTrendsChart();
   });
 
+  let uncertaintyTrendsCanvas, uncertaintyTrendsChart;
+
+  function renderUncertaintyTrendsChart() {
+    if (!uncertaintyData.length) return;
+
+    const labels = uncertaintyData.map((d) => `Prompt ${d.promptId}`);
+    const datasets = [
+      {
+        label: "Very Likely (≥ 0.8)",
+        data: uncertaintyData.map((d) => d["Very Likely"]),
+        borderColor: "rgba(102, 187, 106, 1)", // Green
+        backgroundColor: "rgba(102, 187, 106, 0.2)",
+        borderWidth: 2,
+        tension: 0.3,
+      },
+      {
+        label: "Somewhat Likely (0.6 - 0.8)",
+        data: uncertaintyData.map((d) => d["Somewhat Likely"]),
+        borderColor: "rgba(54, 162, 235, 1)", // Blue
+        backgroundColor: "rgba(54, 162, 235, 0.2)",
+        borderWidth: 2,
+        tension: 0.3,
+      },
+      {
+        label: "Even Chance (0.4 - 0.6)",
+        data: uncertaintyData.map((d) => d["Even Chance"]),
+        borderColor: "rgba(255, 159, 64, 1)", // Orange
+        backgroundColor: "rgba(255, 159, 64, 0.2)",
+        borderWidth: 2,
+        tension: 0.3,
+      },
+      {
+        label: "Somewhat Unlikely (0.2 - 0.4)",
+        data: uncertaintyData.map((d) => d["Somewhat Unlikely"]),
+        borderColor: "rgba(153, 102, 255, 1)", // Purple
+        backgroundColor: "rgba(153, 102, 255, 0.2)",
+        borderWidth: 2,
+        tension: 0.3,
+      },
+      {
+        label: "Very Unlikely (< 0.2)",
+        data: uncertaintyData.map((d) => d["Very Unlikely"]),
+        borderColor: "rgba(239, 83, 80, 1)", // Red
+        backgroundColor: "rgba(239, 83, 80, 0.2)",
+        borderWidth: 2,
+        tension: 0.3,
+      },
+    ];
+
+    if (uncertaintyTrendsChart) {
+      uncertaintyTrendsChart.destroy();
+    }
+
+    uncertaintyTrendsChart = new Chart(
+      uncertaintyTrendsCanvas.getContext("2d"),
+      {
+        type: "line",
+        data: {
+          labels,
+          datasets,
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            title: {
+              display: true,
+              text: "Uncertainty Buckets Across All Prompts",
+            },
+            legend: { position: "top" },
+          },
+          scales: {
+            x: { title: { display: true, text: "Prompts" } },
+            y: {
+              title: {
+                display: true,
+                text: "Percentage of Annotations in Bucket",
+              },
+              beginAtZero: true,
+              max: 100,
+            },
+          },
+        },
+      }
+    );
+  }
+
+  // Summary related
   async function summarizeExplanations() {
     await tick();
 
@@ -480,6 +651,42 @@
 
     renderChartBucket();
   }
+
+  // scripts for option 4 table
+  let selectedBucket = "Very Likely";
+  let filteredAnnotations = [];
+  const bucketRanges = {
+    "Very Likely": [0.8, 1.0],
+    "Somewhat Likely": [0.6, 0.8],
+    "Even Chance": [0.4, 0.6],
+    "Somewhat Unlikely": [0.2, 0.4],
+    "Very Unlikely": [0.0, 0.2],
+  };
+
+  function updateTable() {
+    if (!exampleData.length) return;
+
+    // Extract probability range for selected bucket
+    const [minProb, maxProb] = bucketRanges[selectedBucket] || [0, 1];
+
+    // Filter instances belonging to this bucket and group by instance
+    let groupedAnnotations = {};
+    exampleData.forEach((row) => {
+      if (row.probability >= minProb && row.probability < maxProb) {
+        if (!groupedAnnotations[row.article_url]) {
+          groupedAnnotations[row.article_url] = {
+            predictions: new Array(5).fill(null),
+          };
+        }
+        groupedAnnotations[row.article_url].predictions[
+          row.perturbation_index
+        ] = row.predicted_value;
+      }
+    });
+
+    // Convert to array for rendering
+    filteredAnnotations = Object.values(groupedAnnotations);
+  }
 </script>
 
 <section class="head">
@@ -625,25 +832,82 @@
             </tbody>
           </table>
         </div>
-        <div class="chart-container">
+        <!-- <div class="chart-container">
           <h3>Word Cloud</h3>
           <canvas bind:this={wordCloudCanvas}></canvas>
-        </div>
+        </div> -->
       {/if}
     {/if}
 
-    {#if selectedOptions.certaintyAgree}
+    <!-- {#if selectedOptions.certaintyAgree}
       <div class="chart-container">
         <h3>
           The relationship between AI's self-reported certainty & how labels
           change over 5 runs
         </h3>
       </div>
+    {/if} -->
+    {#if selectedOptions.certaintyAgree}
+      <div class="chart-container">
+        <h3>
+          The relationship between AI's self-reported certainty & how labels
+          change over 5 runs
+        </h3>
+
+        <!-- Dropdown to Select Uncertainty Bucket -->
+        <label for="bucketSelect">Select Uncertainty Bucket:</label>
+        <select bind:value={selectedBucket} on:change={updateTable}>
+          {#each Object.keys(bucketRanges) as bucket}
+            <option value={bucket}>{bucket}</option>
+          {/each}
+        </select>
+      </div>
+
+      <!-- Table for showing annotations over 5 runs -->
+      {#if filteredAnnotations.length > 0}
+        <div class="chart-container">
+          <h3>Annotations in "{selectedBucket}" Across 5 Model Runs</h3>
+          <table class="styled-table">
+            <thead>
+              <tr>
+                <th>Instance</th>
+                <th>Run 1</th>
+                <th>Run 2</th>
+                <th>Run 3</th>
+                <th>Run 4</th>
+                <th>Run 5</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each filteredAnnotations as annotation, index}
+                <tr>
+                  <td>{index + 1}</td>
+                  {#each annotation.predictions as prediction}
+                    <td
+                      style="color: {prediction === 1 ? '#66bb6a' : '#ef5350'};"
+                    >
+                      {prediction === 1 ? "Yes" : "No"}
+                    </td>
+                  {/each}
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+      {:else}
+        <p>No annotations found in this bucket.</p>
+      {/if}
     {/if}
 
-    {#if selectedOptions.allPromptsBucket}
+    <!-- {#if selectedOptions.allPromptsBucket}
       <div class="chart-container">
         <h3>The percentages of examples in each bucket from all prompts</h3>
+      </div>
+    {/if} -->
+    {#if selectedOptions.allPromptsBucket}
+      <div class="chart-container">
+        <h3>Uncertainty Trends Across All Prompts</h3>
+        <canvas bind:this={uncertaintyTrendsCanvas}></canvas>
       </div>
     {/if}
   </div>
