@@ -30,6 +30,7 @@
 
   import {
     Chart,
+    ScatterController,
     BarController,
     CategoryScale,
     LinearScale,
@@ -39,6 +40,7 @@
     Legend,
     registerables,
   } from "chart.js";
+  import ChartDataLabels from "chartjs-plugin-datalabels";
   // import WordCloud from "wordcloud";
 
   let wordCloudCanvas;
@@ -46,7 +48,13 @@
   let exampleData = [];
   let chartInstance, chartBucket;
   let chartCanvas, chartCanvasBucket;
+  let chartCanvasScatter;
+  let chartScatter;
+  let chartNumAgree;
+  let agreementData = {};
+  let chartCanvasIAA;
   Chart.register(...registerables);
+  Chart.register(ChartDataLabels);
   let selectedRun = "Aggregated";
   let summary = writable("Waiting for AI summary...");
   let explanationText = writable([]); // explanations for word analysis
@@ -82,7 +90,10 @@
         summarizeExplanations();
       }
       if (option === "certaintyAgree" && selectedOptions.certaintyAgree) {
+        processAgreementData();
+        renderScatterPlot();
         updateTable();
+        computeIAA();
       }
       if (option === "allPromptsBucket" && selectedOptions.allPromptsBucket) {
         renderUncertaintyTrendsChart();
@@ -231,10 +242,15 @@
       })
     );
 
-    console.log("Final Uncertainty Data:", uncertaintyData.slice(0, 5)); // Debugging print
+    console.log("Final Uncertainty Data:", uncertaintyData.slice(0, 5));
     renderUncertaintyTrendsChart();
+
+    computeIAA();
+    processAgreementData();
+    renderScatterPlot();
   });
 
+  // Chart 5 uncertainty trends
   let uncertaintyTrendsCanvas, uncertaintyTrendsChart;
 
   function renderUncertaintyTrendsChart() {
@@ -304,6 +320,9 @@
               text: "Uncertainty Buckets Across All Prompts",
             },
             legend: { position: "top" },
+            datalabels: {
+              display: false,
+            },
           },
           scales: {
             x: { title: { display: true, text: "Prompts" } },
@@ -321,7 +340,7 @@
     );
   }
 
-  // Summary related
+  // option 3 summary related
   async function summarizeExplanations() {
     await tick();
 
@@ -459,6 +478,7 @@
     console.log("Word Cloud Rendered");
   }
 
+  // Chart 2 buckets
   async function renderChartBucket() {
     await tick();
     if (!exampleData.length) return;
@@ -574,6 +594,12 @@
             text: `Label Counts Grouped by Uncertainty (${selectedRun})`,
           },
           legend: { position: "top" },
+          datalabels: {
+            anchor: "end",
+            align: "top",
+            formatter: (value) => value,
+            font: { weight: "bold", size: 12 },
+          },
         },
         scales: {
           x: { title: { display: true, text: "Uncertainty Levels" } },
@@ -586,6 +612,7 @@
     });
   }
 
+  // Chart 1 Yes/No labels by perturbation
   function renderChart() {
     console.log("RENDERING");
     if (!exampleData.length) return;
@@ -634,9 +661,8 @@
           datalabels: {
             anchor: "end",
             align: "top",
-            formatter: (value) => value, // Show raw number of instances
-            color: "#000",
-            font: { weight: "bold", size: 14 },
+            formatter: (value) => value,
+            font: { weight: "bold", size: 12 },
           },
         },
         scales: {
@@ -666,26 +692,378 @@
   function updateTable() {
     if (!exampleData.length) return;
 
-    // Extract probability range for selected bucket
     const [minProb, maxProb] = bucketRanges[selectedBucket] || [0, 1];
 
-    // Filter instances belonging to this bucket and group by instance
     let groupedAnnotations = {};
+
+    // All articles that belong to the selected bucket
+    let validArticles = new Set();
     exampleData.forEach((row) => {
       if (row.probability >= minProb && row.probability < maxProb) {
+        validArticles.add(row.article_url);
+      }
+    });
+
+    // ALL annotations for these articles
+    exampleData.forEach((row) => {
+      if (validArticles.has(row.article_url)) {
         if (!groupedAnnotations[row.article_url]) {
           groupedAnnotations[row.article_url] = {
             predictions: new Array(5).fill(null),
+            probabilities: new Array(5).fill(null),
           };
         }
         groupedAnnotations[row.article_url].predictions[
           row.perturbation_index
         ] = row.predicted_value;
+        groupedAnnotations[row.article_url].probabilities[
+          row.perturbation_index
+        ] = row.probability.toFixed(2);
       }
     });
 
-    // Convert to array for rendering
     filteredAnnotations = Object.values(groupedAnnotations);
+  }
+
+  // Calculate IAA
+  function computeIAA() {
+    console.log("Starting IAA computation...");
+    if (!exampleData.length) {
+      console.error("No example data available!");
+      return;
+    }
+
+    let groupedData = { overall: [] };
+
+    Object.keys(bucketRanges).forEach((bucket) => {
+      groupedData[bucket] = [];
+    });
+
+    console.log("Initialized groupedData for IAA:", groupedData);
+
+    let groupedAnnotations = {};
+
+    // Assign articles to buckets
+    let validArticles = {};
+    exampleData.forEach((row) => {
+      for (const bucket in bucketRanges) {
+        const [minProb, maxProb] = bucketRanges[bucket];
+        if (row.probability >= minProb && row.probability < maxProb) {
+          if (!validArticles[bucket]) validArticles[bucket] = new Set();
+          validArticles[bucket].add(row.article_url);
+        }
+      }
+    });
+
+    console.log("Valid articles per bucket:", validArticles);
+
+    exampleData.forEach((row) => {
+      for (const bucket in validArticles) {
+        if (validArticles[bucket].has(row.article_url)) {
+          if (!groupedAnnotations[row.article_url]) {
+            groupedAnnotations[row.article_url] = {
+              predictions: new Array(5).fill(null),
+            };
+          }
+          groupedAnnotations[row.article_url].predictions[
+            row.perturbation_index
+          ] = row.predicted_value;
+        }
+      }
+    });
+
+    console.log("Grouped Annotations per article:", groupedAnnotations);
+
+    // Convert to structured format per bucket
+    Object.keys(validArticles).forEach((bucket) => {
+      validArticles[bucket].forEach((article) => {
+        groupedData[bucket].push([...groupedAnnotations[article].predictions]);
+      });
+    });
+
+    groupedData["overall"] = Object.values(groupedAnnotations).map((entry) => [
+      ...entry.predictions,
+    ]);
+
+    console.log("Final grouped data:", groupedData);
+
+    // Fleiss' Kappa & Percentage Agreement
+    let agreementScores = {};
+    for (const bucket in groupedData) {
+      if (groupedData[bucket].length > 0) {
+        console.log(`Computing agreement for bucket: ${bucket}`);
+        agreementScores[bucket] = {
+          fleiss_kappa: computeFleissKappa(groupedData[bucket]),
+          percentage_agreement:
+            groupedData[bucket]
+              .map((annotations) =>
+                annotations.every((val) => val === annotations[0]) ? 1 : 0
+              )
+              .reduce((sum, x) => sum + x, 0) / groupedData[bucket].length,
+        };
+      } else {
+        console.warn(`No data for bucket: ${bucket}`);
+        agreementScores[bucket] = {
+          fleiss_kappa: null,
+          percentage_agreement: null,
+        };
+      }
+    }
+
+    console.log("Agreement Scores:", agreementScores);
+    agreementData = agreementScores;
+    renderAgreementChart();
+  }
+
+  function computeFleissKappa(data) {
+    console.log("Computing Fleiss' Kappa...");
+
+    let numAnnotators = 5;
+    let numItems = data.length;
+
+    if (numItems === 0) {
+      console.warn("No items available for Fleiss' Kappa calculation.");
+      return null;
+    }
+
+    // Count how many yes/no
+    let categoryCounts = { 0: 0, 1: 0 };
+
+    data.forEach((annotations, index) => {
+      let counts = { 0: 0, 1: 0 };
+
+      annotations.forEach((label) => {
+        if (label !== null) {
+          counts[label]++;
+          categoryCounts[label]++;
+        }
+      });
+
+      console.log(`Row ${index + 1} annotation distribution:`, counts);
+    });
+
+    // p_j (Expected probability of each category)
+    let totalAnnotations = numAnnotators * numItems;
+    let p = {
+      0: categoryCounts[0] / totalAnnotations,
+      1: categoryCounts[1] / totalAnnotations,
+    };
+
+    console.log("Category proportions (p_j):", p);
+
+    // Pbar observed agreement
+    let P = data.map((annotations) => {
+      let counts = { 0: 0, 1: 0 };
+
+      annotations.forEach((label) => {
+        if (label !== null) {
+          counts[label]++;
+        }
+      });
+
+      let agreement =
+        (counts[0] * (counts[0] - 1) + counts[1] * (counts[1] - 1)) /
+        (numAnnotators * (numAnnotators - 1));
+
+      return agreement || 0; // Prevent Na cases
+    });
+
+    let Pbar = P.reduce((sum, p) => sum + p, 0) / numItems;
+
+    console.log("Observed Agreement (Pbar):", Pbar);
+
+    // PbarE expected agreement
+    let PbarE = p[0] ** 2 + p[1] ** 2;
+
+    console.log("Expected Agreement (PbarE):", PbarE);
+
+    // Fleiss' Kappa
+    if (Math.abs(1 - PbarE) < 1e-10) {
+      console.warn(
+        "PbarE is 1, indicating perfect agreement or zero variation. Returning Kappa = 1."
+      );
+      return 1;
+    }
+
+    let kappa = (Pbar - PbarE) / (1 - PbarE);
+    kappa = Math.max(-1, Math.min(kappa, 1)); // Clamp kappa within valid range
+
+    console.log("Final Fleiss' Kappa:", kappa);
+    return kappa;
+  }
+
+  function renderAgreementChart() {
+    if (!agreementData || Object.keys(agreementData).length === 0) {
+      console.error("No agreement data available for chart rendering!");
+      return;
+    }
+
+    console.log("Rendering IAA Chart...");
+    console.log("Agreement Data for Chart:", agreementData);
+
+    const labels = Object.keys(agreementData);
+    const kappaValues = labels.map(
+      (bucket) => agreementData[bucket].fleiss_kappa || 0
+    );
+    const percentAgreement = labels.map(
+      (bucket) => agreementData[bucket].percentage_agreement || 0
+    );
+
+    new Chart(chartCanvasIAA.getContext("2d"), {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [
+          {
+            label: "Fleiss' Kappa",
+            data: kappaValues,
+            backgroundColor: "rgba(54, 162, 235, 0.5)",
+            borderColor: "rgba(54, 162, 235, 1)",
+            borderWidth: 2,
+          },
+          {
+            label: "Percentage Agreement",
+            data: percentAgreement,
+            backgroundColor: "rgba(255, 99, 132, 0.5)",
+            borderColor: "rgba(255, 99, 132, 1)",
+            borderWidth: 2,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          title: {
+            display: true,
+            text: "Inter-Annotator Agreement Across Uncertainty Buckets",
+          },
+          legend: { position: "top" },
+          datalabels: {
+            anchor: "end",
+            align: "top",
+            formatter: (value) => value.toFixed(2),
+            font: { weight: "bold", size: 12 },
+          },
+        },
+        scales: {
+          x: { title: { display: true, text: "Uncertainty Buckets" } },
+          y: {
+            title: { display: true, text: "Agreement Score" },
+            beginAtZero: true,
+          },
+        },
+      },
+    });
+  }
+
+  let agreementDataS = [];
+
+  function processAgreementData() {
+    if (!exampleData.length) return;
+
+    let groupedData = {};
+
+    // Group by article and count
+    exampleData.forEach((row) => {
+      let article = row.article_url;
+
+      if (!groupedData[article]) {
+        groupedData[article] = { yesVotes: 0, noVotes: 0, probabilities: [] };
+      }
+
+      if (row.predicted_value === 1) {
+        groupedData[article].yesVotes++;
+      } else {
+        groupedData[article].noVotes++;
+      }
+
+      groupedData[article].probabilities.push(row.probability);
+    });
+
+    // Agreement level & average probability
+    agreementDataS = Object.values(groupedData).map((group) => {
+      let totalVotes = group.yesVotes + group.noVotes;
+
+      let agreementLevel = Math.max(group.yesVotes, group.noVotes);
+      let agreementFraction = `${agreementLevel}/5`;
+
+      let avgProbability =
+        group.probabilities.reduce((sum, p) => sum + p, 0) / totalVotes;
+
+      return {
+        x: agreementFraction,
+        y: avgProbability,
+      };
+    });
+
+    console.log("Processed Scatter Plot Data:", agreementDataS);
+  }
+
+  function renderScatterPlot() {
+    if (!agreementDataS.length) return;
+
+    const ctx = chartCanvasScatter.getContext("2d");
+
+    if (chartScatter) {
+      chartScatter.destroy();
+    }
+
+    chartScatter = new Chart(ctx, {
+      type: "scatter",
+      data: {
+        datasets: [
+          {
+            label: "Agreement vs. Certainty",
+            data: agreementDataS,
+            backgroundColor: "rgba(54, 162, 235, 0.4)", // Blue dots
+            borderColor: "rgba(54, 162, 235, 1)",
+            borderWidth: 1,
+            pointRadius: 6,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          title: {
+            display: true,
+            text: "Agreement vs. Certainty Scatter Plot",
+          },
+          tooltip: {
+            callbacks: {
+              label: (tooltipItem) => {
+                let value = tooltipItem.raw.y.toFixed(2);
+                return `Avg Certainty: ${value}`;
+              },
+            },
+          },
+          datalabels: {
+            display: false,
+          },
+        },
+        scales: {
+          x: {
+            title: { display: true, text: "Agreement Level (3/5 → 5/5)" },
+            type: "category",
+            labels: ["3/5", "4/5", "5/5"],
+            ticks: {
+              autoSkip: false,
+            },
+          },
+          y: {
+            title: { display: true, text: "Certainty (0-1)" },
+            ticks: {
+              callback: (value) =>
+                value < 0.3
+                  ? "Not Certain"
+                  : value < 0.7
+                    ? "Somewhat Certain"
+                    : "Certain",
+            },
+          },
+        },
+      },
+    });
   }
 </script>
 
@@ -712,7 +1090,7 @@
 
 <section>
   <div class="top">
-    <h2>This page is under construction</h2>
+    <!-- <h2>This page is under construction</h2> -->
     <p>
       <span style="font-weight:bold">Prompt {idshow} </span>
       ({formatTimeSubmitted(timeP)})
@@ -800,12 +1178,6 @@
       </div>
     {/if}
 
-    <!-- {#if selectedOptions.summary}
-      <div class="chart-container">
-        <h3>AI Summary</h3>
-        <p>{$summary}</p>
-      </div>
-    {/if} -->
     {#if selectedOptions.summary}
       <div class="chart-container">
         <h3>AI Summary</h3>
@@ -832,29 +1204,21 @@
             </tbody>
           </table>
         </div>
-        <!-- <div class="chart-container">
-          <h3>Word Cloud</h3>
-          <canvas bind:this={wordCloudCanvas}></canvas>
-        </div> -->
       {/if}
     {/if}
 
-    <!-- {#if selectedOptions.certaintyAgree}
-      <div class="chart-container">
-        <h3>
-          The relationship between AI's self-reported certainty & how labels
-          change over 5 runs
-        </h3>
-      </div>
-    {/if} -->
+    <!-- Chart 4 group -->
     {#if selectedOptions.certaintyAgree}
+      <div class="chart-container">
+        <h3>Agreement vs. Certainty</h3>
+        <canvas bind:this={chartCanvasScatter}></canvas>
+      </div>
       <div class="chart-container">
         <h3>
           The relationship between AI's self-reported certainty & how labels
           change over 5 runs
         </h3>
 
-        <!-- Dropdown to Select Uncertainty Bucket -->
         <label for="bucketSelect">Select Uncertainty Bucket:</label>
         <select bind:value={selectedBucket} on:change={updateTable}>
           {#each Object.keys(bucketRanges) as bucket}
@@ -863,30 +1227,40 @@
         </select>
       </div>
 
-      <!-- Table for showing annotations over 5 runs -->
       {#if filteredAnnotations.length > 0}
         <div class="chart-container">
           <h3>Annotations in "{selectedBucket}" Across 5 Model Runs</h3>
+          <p>
+            Note: For more details, numbers below each prediction are
+            probabilities, scaled by: <br /> "Very Likely": 0.8 ≤ P ≤ 1.0
+            <br />
+            "Somewhat Likely": 0.6 &le; P &lt; 0.8 <br /> "Even Chance": 0.4
+            &le; P &lt; 0.6 <br /> "Somewhat Unlikely": 0.2 &le; P &lt; 0.4
+            <br />"Very Unlikely": 0.0 &le; P &lt; 0.2
+          </p>
           <table class="styled-table">
             <thead>
               <tr>
                 <th>Instance</th>
-                <th>Run 1</th>
-                <th>Run 2</th>
-                <th>Run 3</th>
-                <th>Run 4</th>
-                <th>Run 5</th>
+                {#each [1, 2, 3, 4, 5] as run}
+                  <th>Run {run}</th>
+                {/each}
               </tr>
             </thead>
             <tbody>
               {#each filteredAnnotations as annotation, index}
                 <tr>
                   <td>{index + 1}</td>
-                  {#each annotation.predictions as prediction}
+                  {#each annotation.predictions as prediction, runIndex}
                     <td
                       style="color: {prediction === 1 ? '#66bb6a' : '#ef5350'};"
+                      title="Probability: {annotation.probabilities[runIndex]}"
                     >
-                      {prediction === 1 ? "Yes" : "No"}
+                      {prediction === 1 ? "Yes" : prediction === 0 ? "No" : "—"}
+                      <br />
+                      <small style="color: black; font-size: 12px;">
+                        {annotation.probabilities[runIndex] ?? ""}
+                      </small>
                     </td>
                   {/each}
                 </tr>
@@ -895,15 +1269,15 @@
           </table>
         </div>
       {:else}
-        <p>No annotations found in this bucket.</p>
+        <p class="chart-container">No annotations found in this bucket.</p>
       {/if}
+
+      <div class="chart-container">
+        <h3>Inter-Annotator Agreement Across Uncertainty Buckets</h3>
+        <canvas bind:this={chartCanvasIAA}></canvas>
+      </div>
     {/if}
 
-    <!-- {#if selectedOptions.allPromptsBucket}
-      <div class="chart-container">
-        <h3>The percentages of examples in each bucket from all prompts</h3>
-      </div>
-    {/if} -->
     {#if selectedOptions.allPromptsBucket}
       <div class="chart-container">
         <h3>Uncertainty Trends Across All Prompts</h3>

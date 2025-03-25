@@ -14,7 +14,8 @@ const openai = new OpenAI({
 export async function POST({ request }) {
   try {
     const { examples } = await request.json();
-    console.log("🛑 Debug: exampleData RECEIVED:", examples.slice(0, 5));
+    console.log("Debug: exampleData RECEIVED:", examples.slice(0, 5));
+    console.log("Number of examples" + examples.length);
 
     if (!examples || examples.length === 0) {
       return new Response(JSON.stringify({ message: "No examples provided" }), {
@@ -60,6 +61,7 @@ export async function POST({ request }) {
       );
     }
 
+    // In the current case, all 250 annotation explanations are given to be summarized.
     const prompt = `Summarize the following AI-generated EXPLANATIONS. The task was to predict whether an article contains hard news, AI predictions are included for context:\n\n${filteredExamples}`;
 
     const gptResponse = await openai.chat.completions.create({
