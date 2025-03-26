@@ -709,6 +709,8 @@
       if (validArticles.has(row.article_url)) {
         if (!groupedAnnotations[row.article_url]) {
           groupedAnnotations[row.article_url] = {
+            article_url: row.article_url,
+            article_text: row.text,
             predictions: new Array(5).fill(null),
             probabilities: new Array(5).fill(null),
           };
@@ -1242,6 +1244,8 @@
             <thead>
               <tr>
                 <th>Instance</th>
+                <th>Article URL</th>
+                <th>Article Text</th>
                 {#each [1, 2, 3, 4, 5] as run}
                   <th>Run {run}</th>
                 {/each}
@@ -1251,6 +1255,18 @@
               {#each filteredAnnotations as annotation, index}
                 <tr>
                   <td>{index + 1}</td>
+                  <td>
+                    <a
+                      href={annotation.article_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {annotation.article_url.slice(28, 42)}...
+                    </a>
+                  </td>
+                  <td>
+                    {annotation.article_text.slice(0, 50)}...
+                  </td>
                   {#each annotation.predictions as prediction, runIndex}
                     <td
                       style="color: {prediction === 1 ? '#66bb6a' : '#ef5350'};"
@@ -1381,7 +1397,8 @@
     background-color: transparent;
   }
 
-  .checkbox-group-c:hover {
+  .checkbox-group-c:hover,
+  .checkbox-group-c:has(input:checked) {
     background-color: #7eb7f5;
     color: white;
   }

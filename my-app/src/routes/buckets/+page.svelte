@@ -18,6 +18,7 @@
     faToggleOn,
     faToggleOff,
     faChevronDown,
+    faCircleInfo,
   } from "@fortawesome/free-solid-svg-icons";
 
   import {
@@ -118,7 +119,7 @@
 
         return {
           ...row,
-          agreement_display: `${agreementCount}/4`,
+          agreement_display: `${agreementCount + 1}/5`,
           agreement_score: agreementCount,
         };
       });
@@ -214,8 +215,8 @@
 
   const buckets = [
     { name: "All", color: "#FFFFFF" },
-    { name: "Very Likely", color: "#5EE85C" },
-    { name: "Somewhat Likely", color: "#BEE85C" },
+    { name: "Very Likely", color: "#9b59b6" },
+    { name: "Somewhat Likely", color: "#9b59b6" },
     { name: "Even Chance", color: "#E8E35C" },
     { name: "Somewhat Unlikely", color: "#E88D5C" },
     { name: "Very Unlikely", color: "#E85C5C" },
@@ -240,15 +241,19 @@
 
   function getConfidenceLevel(probability) {
     if (probability < 0.2) {
-      return { label: "Very Unlikely", color: "#E85C5C" }; // Red
+      return { label: "Very Unlikely", color: "#EEE3F3", textColor: "black" }; // Light purple
     } else if (probability < 0.4) {
-      return { label: "Somewhat Unlikely", color: "#E88D5C" }; // Orange
+      return {
+        label: "Somewhat Unlikely",
+        color: "#DCC4E5",
+        textColor: "black",
+      };
     } else if (probability < 0.6) {
-      return { label: "Even Chance", color: "#E8E35C" }; // Yellow
+      return { label: "Even Chance", color: "#C39AD3", textColor: "black" };
     } else if (probability < 0.8) {
-      return { label: "Somewhat Likely", color: "#BEE85C" }; // Light Green
+      return { label: "Somewhat Likely", color: "#A56ABD", textColor: "white" };
     } else {
-      return { label: "Very Likely", color: "#5EE85C" }; // Green
+      return { label: "Very Likely", color: "#8132A1", textColor: "white" }; // Dark purple
     }
   }
 
@@ -318,6 +323,13 @@
       });
     }
   }
+
+  $: articleTextClass =
+    selectedOptions.certainty ||
+    selectedOptions.modelConsistency ||
+    selectedOptions.explanation
+      ? "shrink-column" // Apply reduced width
+      : "wide-column"; // Default full width
 </script>
 
 <section class="head">
@@ -342,32 +354,58 @@
 </section>
 
 <div class="checkbox-group">
-  <label class="checkbox-group-c">
+  <label class="checkbox-group-c certainty-btn">
     <input
       type="checkbox"
       on:change={() => toggleOption("certainty")}
       bind:checked={selectedOptions.certainty}
     />
-    I want to see how certain the AI is about these labels
+    <!-- I want to see how certain the AI is about these labels -->
+    <!-- AI Certainty <span><Fa icon={faCircleInfo} style="opacity: 0.5;" /></span> -->
+    AI Certainty
+    <span
+      class="tooltip-container"
+      data-tooltip="We asked the AI verbally to give us an estimate of its certainty on its answer, 
+      we included in the prompt: P: <the probability between 0.0 and 1.0 that [the guess] is correct, 
+      without any extra commentary whatsoever; just the probability!> Select to view in the table."
+    >
+      <Fa icon={faCircleInfo} style="opacity: 0.5;" />
+    </span>
   </label>
 
-  <label class="checkbox-group-c">
+  <label class="checkbox-group-c consistency-btn">
     <input
       type="checkbox"
       on:change={() => toggleOption("modelConsistency")}
       bind:checked={selectedOptions.modelConsistency}
     />
-    I want to see if the AI makes the same predictions if I change some of the model
-    settings
+    <!-- I want to see if the AI makes the same predictions when the model is run 5 times -->
+    Prediction Consistency
+    <span
+      class="tooltip-container"
+      data-tooltip="We ran the same model for 5 times with a temperature of 0.7 (the answer the AI gives is non-deterministic,
+       and would vary across runs), this number shows how many times out of all 5 runs the AI agrees with the answer from first run.
+       Select to view in the table."
+    >
+      <Fa icon={faCircleInfo} style="opacity: 0.5;" />
+    </span>
   </label>
 
-  <label class="checkbox-group-c">
+  <label class="checkbox-group-c explanation-btn">
     <input
       type="checkbox"
       on:change={() => toggleOption("explanation")}
       bind:checked={selectedOptions.explanation}
     />
-    I want to see the AI's explanations
+    <!-- I want to see the AI's explanations -->
+    AI Explanations
+    <span
+      class="tooltip-container"
+      data-tooltip="We asked AI to give us an explanation for its answer by including in the prompt: Explanation: <include your explanation here.>
+      Select to view in the table."
+    >
+      <Fa icon={faCircleInfo} style="opacity: 0.5;" />
+    </span>
   </label>
 </div>
 
@@ -423,8 +461,9 @@
           <tr>
             <th style="width: 5%;"></th>
             <th style="width: 10%; max-width: 100px;">Article URL</th>
-            <th style="width: 40%; white-space:normal; max-width: 400px;"
-              >Article Text</th
+            <th
+              class={articleTextClass}
+              style="white-space:normal; max-width: 400px;">Article Text</th
             >
 
             <th class="sortable" on:click={() => sortBy("predicted_value")}>
@@ -448,11 +487,15 @@
                     ▼
                   </span>
                 </div>
+                <!-- <span><Fa icon={faCircleInfo} style="opacity: 0.5;" /></span> -->
               </div>
             </th>
 
             {#if selectedOptions.certainty}
-              <th class="sortable" on:click={() => sortBy("probability")}>
+              <th
+                class="sortable certainty-header"
+                on:click={() => sortBy("probability")}
+              >
                 <div class="header-content">
                   Run 1 Certainty
                   <div class="arrow-container">
@@ -479,7 +522,10 @@
 
             {#if selectedOptions.modelConsistency}
               <!-- Model Consistency -->
-              <th class="sortable" on:click={() => sortBy("agreement_score")}>
+              <th
+                class="sortable consistency-header"
+                on:click={() => sortBy("agreement_score")}
+              >
                 <div class="header-content">
                   Model Consistency
                   <div class="arrow-container">
@@ -505,7 +551,7 @@
             {/if}
 
             {#if selectedOptions.explanation}
-              <th style="width: 5%;">Explanation</th>
+              <th class="explanation-header" style="width: 5%;">Explanation</th>
             {/if}
           </tr>
         </thead>
@@ -532,11 +578,12 @@
                 </a>
               </td>
               <td
-                style="display:flex; flex-direction:row"
+                class={articleTextClass}
+                style="width:100%; display:flex; flex-direction:row"
                 on:click={() => toggleExpand(i, expandedRows)}
               >
                 {#if $expandedRows[i]}
-                  <p style="width:100%; white-space:wrap;">
+                  <p style="white-space:wrap;">
                     <Fa icon={faChevronDown} style="color: #5facf2" /> &nbsp; {row.text}
                   </p>
                 {:else}
@@ -563,7 +610,7 @@
                       style="
                         background-color: {getConfidenceLevel(row.probability)
                         .color};
-                        color: black;
+                        color: {getConfidenceLevel(row.probability).textColor};
                         font-weight: bold;
                         padding: 4px 10px;
                         border-radius: 10px;
@@ -579,7 +626,7 @@
 
               {#if selectedOptions.modelConsistency}
                 <td style="font-weight:bold"
-                  >{row.agreement_display} next runs agree with
+                  >{row.agreement_display} runs agree with
                   <span
                     style="color: {row.predicted_value ? '#66bb6a' : '#ef5350'}"
                     >{row.predicted_value ? "Yes" : "No"}</span
@@ -768,7 +815,8 @@
   .checkbox-group {
     display: flex;
     flex-direction: row;
-    gap: 20px; /* Space between buttons */
+    /* justify-content: space-around; */
+    gap: 5%;
     margin: 2% 5% 2% 5%;
   }
 
@@ -787,14 +835,44 @@
     background-color: transparent;
   }
 
-  .checkbox-group-c:hover {
-    background-color: #7eb7f5;
+  /* button coloring */
+  .certainty-btn {
+    border-color: #9b59b6;
+    color: #9b59b6;
+  }
+  .certainty-btn:hover,
+  .certainty-btn:has(input:checked) {
+    background-color: #9b59b6;
     color: white;
   }
+  .certainty-header {
+    background-color: rgb(235, 203, 248);
+  }
 
-  .checkbox-group-c:checked {
-    background-color: #7eb7f5;
+  .consistency-btn {
+    border-color: #66bb6a;
+    color: #66bb6a;
+  }
+  .consistency-btn:hover,
+  .consistency-btn:has(input:checked) {
+    background-color: #66bb6a;
     color: white;
+  }
+  .consistency-header {
+    background-color: rgb(195, 239, 197);
+  }
+
+  .explanation-btn {
+    border-color: #e67e22;
+    color: #e67e22;
+  }
+  .explanation-btn:hover,
+  .explanation-btn:has(input:checked) {
+    background-color: #e67e22;
+    color: white;
+  }
+  .explanation-header {
+    background-color: rgb(246, 212, 182);
   }
 
   .sortable {
@@ -824,5 +902,55 @@
 
   .active {
     color: black;
+  }
+
+  /* for article text */
+  .wide-column {
+    width: 60%;
+    /* max-width: 500px; */
+    white-space: normal;
+    transition: width 0.3s ease-in-out;
+  }
+
+  .shrink-column {
+    width: 20%;
+    max-width: 450px;
+    white-space: normal;
+    transition: width 0.3s ease-in-out;
+  }
+
+  /* Hover show info */
+  .tooltip-container {
+    position: relative;
+    display: inline-block;
+    cursor: pointer;
+  }
+
+  .tooltip-container:hover::after {
+    visibility: visible;
+    opacity: 1;
+  }
+
+  .tooltip-container::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-30%);
+    background-color: rgb(245, 245, 245, 0.95);
+    border: 2px solid #b2b2b2;
+    color: black;
+    padding: 10px;
+    font-size: 13px;
+    font-weight: 400;
+    border-radius: 6px;
+    width: 500px;
+    text-align: left;
+    white-space: normal; /* text wrapping */
+    line-height: 1.4;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.2s ease-in-out;
+    z-index: 10;
   }
 </style>
