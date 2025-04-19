@@ -365,7 +365,7 @@
     AI Certainty
     <span
       class="tooltip-container"
-      data-tooltip="We asked the AI verbally to give us an estimate of its certainty on its answer, 
+      data-tooltip="We asked the AI verbally to give us an numerial estimate of its certainty on its answer, 
       we included in the prompt: P: <the probability between 0.0 and 1.0 that [the guess] is correct, 
       without any extra commentary whatsoever; just the probability!> Select to view in the table."
     >
@@ -488,6 +488,12 @@
                   </span>
                 </div>
                 <!-- <span><Fa icon={faCircleInfo} style="opacity: 0.5;" /></span> -->
+                <span
+                  class="tooltip-container-table"
+                  data-tooltip="In this column are all AI predictions in run 1."
+                >
+                  <Fa icon={faCircleInfo} style="opacity: 0.5;" />
+                </span>
               </div>
             </th>
 
@@ -516,6 +522,14 @@
                       ▼
                     </span>
                   </div>
+                  <span
+                    class="tooltip-container-table"
+                    data-tooltip="We asked the AI verbally to give us an estimate of its certainty on its answer, 
+      we included in the prompt: P: <the probability between 0.0 and 1.0 that [the guess] is correct, 
+      without any extra commentary whatsoever; just the probability!> The certainty values in this column are from run 1."
+                  >
+                    <Fa icon={faCircleInfo} style="opacity: 0.5;" />
+                  </span>
                 </div>
               </th>
             {/if}
@@ -546,12 +560,28 @@
                       ▼
                     </span>
                   </div>
+                  <span
+                    class="tooltip-container-table"
+                    data-tooltip="We ran the same model for 5 times with a temperature of 0.7 (the answer the AI gives is non-deterministic,
+       and would vary across runs), this number shows how many times out of all 5 runs the AI agrees with the answer from first run.
+       Select to view in the table."
+                  >
+                    <Fa icon={faCircleInfo} style="opacity: 0.5;" />
+                  </span>
                 </div>
               </th>
             {/if}
 
             {#if selectedOptions.explanation}
-              <th class="explanation-header" style="width: 5%;">Explanation</th>
+              <th class="explanation-header" style="width: 5%;"
+                >Explanation <span
+                  class="tooltip-container-table"
+                  data-tooltip="We asked AI to give us an explanation for its answer by including in the prompt: Explanation: <include your explanation here.>
+      Select to view in the table."
+                >
+                  <Fa icon={faCircleInfo} style="opacity: 0.5;" />
+                </span></th
+              >
             {/if}
           </tr>
         </thead>
@@ -937,6 +967,40 @@
     bottom: 100%;
     left: 50%;
     transform: translateX(-30%);
+    background-color: rgb(245, 245, 245, 0.95);
+    border: 2px solid #b2b2b2;
+    color: black;
+    padding: 10px;
+    font-size: 13px;
+    font-weight: 400;
+    border-radius: 6px;
+    width: 500px;
+    text-align: left;
+    white-space: normal; /* text wrapping */
+    line-height: 1.4;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.2s ease-in-out;
+    z-index: 10;
+  }
+
+  .tooltip-container-table {
+    position: relative;
+    display: inline-block;
+    cursor: pointer;
+  }
+
+  .tooltip-container-table:hover::after {
+    visibility: visible;
+    opacity: 1;
+  }
+
+  .tooltip-container-table::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: -50px;
+    left: 50%;
+    transform: translateX(-103%);
     background-color: rgb(245, 245, 245, 0.95);
     border: 2px solid #b2b2b2;
     color: black;

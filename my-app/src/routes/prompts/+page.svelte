@@ -48,6 +48,7 @@
       logout();
     }
     fetchPastPrompts();
+    addPromptWindow();
   });
 
   onMount(() => {

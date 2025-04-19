@@ -18,6 +18,7 @@
     faToggleOn,
     faToggleOff,
     faChevronDown,
+    faCircleInfo,
   } from "@fortawesome/free-solid-svg-icons";
   import { tick } from "svelte";
 
@@ -48,6 +49,7 @@
   let exampleData = [];
   let chartInstance, chartBucket;
   let chartCanvas, chartCanvasBucket;
+  let labelCountChartCanvas, labelCountChart;
   let chartCanvasScatter;
   let chartScatter;
   let chartNumAgree;
@@ -60,6 +62,11 @@
   let explanationText = writable([]); // explanations for word analysis
   let wordFrequency = writable([]);
   let uncertaintyData = [];
+  let clabels = [],
+    cyesMeans = [],
+    cyesStds = [],
+    cnoMeans = [],
+    cnoStds = [];
 
   let selectedOptions = {
     runs5: false,
@@ -68,11 +75,6 @@
     certaintyAgree: false,
     allPromptsBucket: false,
   };
-
-  // function toggleOption(option) {
-  //   selectedOptions[option] = !selectedOptions[option];
-  //   console.log("Updated selected options:", selectedOptions);
-  // }
 
   function toggleOption(option) {
     selectedOptions[option] = !selectedOptions[option];
@@ -97,6 +99,7 @@
       }
       if (option === "allPromptsBucket" && selectedOptions.allPromptsBucket) {
         renderUncertaintyTrendsChart();
+        renderYesNoChart(clabels, cyesMeans, cyesStds, cnoMeans, cnoStds);
       }
     });
   }
@@ -156,19 +159,13 @@
       console.error("Error fetching examples:", error);
     }
 
-    // if (typeof window !== "undefined") {
-    //   const WordCloud = (await import("wordcloud")).default;
-
     const explanations = exampleData
       .map((ex) => ex.explanation)
       .filter((ex) => ex !== null && ex !== undefined && ex.trim() !== ""); // Remove empty values
     explanationText.set(explanations);
     computeWordFrequency(explanations);
 
-    //   renderWordCloud();
-    // }
-
-    // Getting all the prompt data for the 5th chart
+    // Getting all the prompt data for chart 5
     console.log("Fetching uncertainty data for all prompts...");
 
     const userIdValue = get(userId);
@@ -180,6 +177,12 @@
     }
 
     let promptUncertainty = {}; // Stores bucket counts per prompt
+
+    let yesMeans = [],
+      yesStds = [],
+      noMeans = [],
+      noStds = [];
+    let labels = [];
 
     for (const prompt of allPrompts) {
       try {
@@ -225,6 +228,22 @@
           });
 
           promptUncertainty[prompt.prompt_id] = buckets;
+
+          // For showing Yes/No
+          let yesPerRun = [0, 0, 0, 0, 0];
+          let noPerRun = [0, 0, 0, 0, 0];
+
+          perturbations.forEach((row) => {
+            const idx = row.perturbation_index;
+            if (row.predicted_value === 1) yesPerRun[idx]++;
+            else noPerRun[idx]++;
+          });
+
+          yesMeans.push(mean(yesPerRun));
+          yesStds.push(std(yesPerRun));
+          noMeans.push(mean(noPerRun));
+          noStds.push(std(noPerRun));
+          labels.push(`Prompt ${labels.length + 1}`);
         } else {
           console.error(
             `Failed to fetch perturbations for prompt ${prompt.prompt_id}`
@@ -242,13 +261,102 @@
       })
     );
 
+    // renderYesNoChart(labels, yesMeans, yesStds, noMeans, noStds);
+    clabels = labels;
+    cyesMeans = yesMeans;
+    cyesStds = yesStds;
+    cnoMeans = noMeans;
+    cnoStds = noStds;
+    renderYesNoChart(clabels, cyesMeans, cyesStds, cnoMeans, cnoStds);
+
     console.log("Final Uncertainty Data:", uncertaintyData.slice(0, 5));
     renderUncertaintyTrendsChart();
 
     computeIAA();
     processAgreementData();
     renderScatterPlot();
+
+    // if (typeof window !== "undefined") {
+    //   const WordCloud = (await import("wordcloud")).default;
+    //   renderWordCloud();
+    // }
   });
+
+  // Utility functions
+  function mean(arr) {
+    const total = arr.reduce((acc, val) => acc + val, 0);
+    return total / arr.length;
+  }
+
+  function std(arr) {
+    const m = mean(arr);
+    const variance =
+      arr.reduce((acc, val) => acc + (val - m) ** 2, 0) / arr.length;
+    return Math.sqrt(variance);
+  }
+
+  // chart 5 yes/no
+  function renderYesNoChart(labels, yesMeans, yesStds, noMeans, noStds) {
+    if (labelCountChart) labelCountChart.destroy();
+
+    labelCountChart = new Chart(labelCountChartCanvas.getContext("2d"), {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [
+          {
+            label: "Yes Labels",
+            data: yesMeans,
+            backgroundColor: "rgba(102, 187, 106, 0.5)",
+            borderColor: "rgba(102, 187, 106, 1)",
+            borderWidth: 1,
+            errorBarData: yesStds,
+          },
+          {
+            label: "No Labels",
+            data: noMeans,
+            backgroundColor: "rgba(239, 83, 80, 0.5)",
+            borderColor: "rgba(239, 83, 80, 1)",
+            borderWidth: 1,
+            errorBarData: noStds,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          title: {
+            display: true,
+            text: "Average Yes/No Counts per Prompt with StdDev",
+          },
+          tooltip: {
+            callbacks: {
+              label: function (context) {
+                const std =
+                  context.dataset.label === "Yes Labels"
+                    ? yesStds[context.dataIndex]
+                    : noStds[context.dataIndex];
+                return `${context.dataset.label}: ${context.raw.toFixed(1)} ± ${std.toFixed(1)}`;
+              },
+            },
+          },
+          datalabels: {
+            anchor: "end",
+            align: "top",
+            formatter: (value) => value,
+            font: { weight: "bold", size: 12 },
+          },
+        },
+        scales: {
+          x: { title: { display: true, text: "Prompts" } },
+          y: {
+            beginAtZero: true,
+            title: { display: true, text: "Average Label Count" },
+          },
+        },
+      },
+    });
+  }
 
   // Chart 5 uncertainty trends
   let uncertaintyTrendsCanvas, uncertaintyTrendsChart;
@@ -256,7 +364,9 @@
   function renderUncertaintyTrendsChart() {
     if (!uncertaintyData.length) return;
 
-    const labels = uncertaintyData.map((d) => `Prompt ${d.promptId}`);
+    // const labels = uncertaintyData.map((d) => `Prompt ${d.promptId}`);
+    const labels = uncertaintyData.map((_, i) => `Prompt ${i + 1}`);
+
     const datasets = [
       {
         label: "Very Likely (≥ 0.8)",
@@ -483,12 +593,19 @@
     await tick();
     if (!exampleData.length) return;
 
+    // let uncertaintyBuckets = {
+    //   "Very Likely": { yes: 0, no: 0 },
+    //   "Somewhat Likely": { yes: 0, no: 0 },
+    //   "Even Chance": { yes: 0, no: 0 },
+    //   "Somewhat Unlikely": { yes: 0, no: 0 },
+    //   "Very Unlikely": { yes: 0, no: 0 },
+    // };
     let uncertaintyBuckets = {
-      "Very Likely": { yes: 0, no: 0 },
-      "Somewhat Likely": { yes: 0, no: 0 },
-      "Even Chance": { yes: 0, no: 0 },
-      "Somewhat Unlikely": { yes: 0, no: 0 },
       "Very Unlikely": { yes: 0, no: 0 },
+      "Somewhat Unlikely": { yes: 0, no: 0 },
+      "Even Chance": { yes: 0, no: 0 },
+      "Somewhat Likely": { yes: 0, no: 0 },
+      "Very Likely": { yes: 0, no: 0 },
     };
 
     if (selectedRun === "Aggregated") {
@@ -1055,12 +1172,13 @@
           y: {
             title: { display: true, text: "Certainty (0-1)" },
             ticks: {
-              callback: (value) =>
-                value < 0.3
-                  ? "Not Certain"
-                  : value < 0.7
-                    ? "Somewhat Certain"
-                    : "Certain",
+              // callback: (value) =>
+              //   value < 0.3
+              //     ? "Not Certain"
+              //     : value < 0.7
+              //       ? "Somewhat Certain"
+              //       : "Certain",
+              callback: (value) => value,
             },
           },
         },
@@ -1106,10 +1224,19 @@
     <label class="checkbox-group-c">
       <input
         type="checkbox"
+        on:change={() => toggleOption("allPromptsBucket")}
+        bind:checked={selectedOptions.allPromptsBucket}
+      />
+      Across all prompts: percentages of examples in each bucket & label changes.
+    </label>
+
+    <label class="checkbox-group-c">
+      <input
+        type="checkbox"
         on:change={() => toggleOption("runs5")}
         bind:checked={selectedOptions.runs5}
       />
-      Show me how the labels changed across different model runs.
+      Prompt {idshow}: how the labels changed across different model runs.
     </label>
 
     <label class="checkbox-group-c">
@@ -1118,7 +1245,7 @@
         on:change={() => toggleOption("buckets5")}
         bind:checked={selectedOptions.buckets5}
       />
-      Show me the uncertainty for all labels.
+      Prompt {idshow}: the uncertainty for all labels.
     </label>
 
     <label class="checkbox-group-c">
@@ -1127,7 +1254,7 @@
         on:change={() => toggleOption("summary")}
         bind:checked={selectedOptions.summary}
       />
-      Show me a summary of the explanations.
+      Prompt {idshow}: summary of the explanations.
     </label>
 
     <label class="checkbox-group-c">
@@ -1136,17 +1263,8 @@
         on:change={() => toggleOption("certaintyAgree")}
         bind:checked={selectedOptions.certaintyAgree}
       />
-      Show me the relationship between the AI's self-reported certainty and how labels
-      changed over 5 runs.
-    </label>
-
-    <label class="checkbox-group-c">
-      <input
-        type="checkbox"
-        on:change={() => toggleOption("allPromptsBucket")}
-        bind:checked={selectedOptions.allPromptsBucket}
-      />
-      Show me the percentages of examples that fall into each bucket across all prompts.
+      Prompt {idshow}: the relationship between the AI's self-reported certainty
+      and how labels changed over 5 runs.
     </label>
   </div>
 
@@ -1154,6 +1272,25 @@
     {#if !selectedOptions.runs5 && !selectedOptions.buckets5 && !selectedOptions.summary && !selectedOptions.certaintyAgree && !selectedOptions.allPromptsBucket}
       <h3 class="chart-container">&larr; click on a button to see summary</h3>
     {/if}
+    {#if selectedOptions.allPromptsBucket}
+      <div class="chart-container">
+        <h3>
+          Uncertainty Trends Across All Prompts <span
+            class="tooltip-container"
+            data-tooltip="On this graph are the percentages of annotations that fall into each certainty bucket across all of your past prompts."
+          >
+            <Fa icon={faCircleInfo} style="opacity: 0.5;" />
+          </span>
+        </h3>
+        <canvas bind:this={uncertaintyTrendsCanvas}></canvas>
+      </div>
+
+      <div class="chart-container">
+        <h3>Label changes across all prompts</h3>
+        <canvas bind:this={labelCountChartCanvas}></canvas>
+      </div>
+    {/if}
+
     {#if selectedOptions.runs5}
       <div class="chart-container">
         <h3>Label changes across model runs</h3>
@@ -1182,7 +1319,14 @@
 
     {#if selectedOptions.summary}
       <div class="chart-container">
-        <h3>AI Summary</h3>
+        <h3>
+          AI Summary <span
+            class="tooltip-container"
+            data-tooltip="We sent all the explanations of results generated by AI to another AI to summarize them. The summary takes a few seconds to generate."
+          >
+            <Fa icon={faCircleInfo} style="opacity: 0.5;" />
+          </span>
+        </h3>
         <p>{$summary}</p>
       </div>
 
@@ -1212,7 +1356,16 @@
     <!-- Chart 4 group -->
     {#if selectedOptions.certaintyAgree}
       <div class="chart-container">
-        <h3>Agreement vs. Certainty</h3>
+        <h3>
+          Agreement vs. Certainty <span
+            class="tooltip-container"
+            data-tooltip="We are mapping the agreement level from 5 model runs on the x-axis, 
+            and the average numerical estimate of certainty of these five runs on the y-axis. 
+            Each dot represents the average 5-runs certainty on one article."
+          >
+            <Fa icon={faCircleInfo} style="opacity: 0.5;" />
+          </span>
+        </h3>
         <canvas bind:this={chartCanvasScatter}></canvas>
       </div>
       <div class="chart-container">
@@ -1221,7 +1374,7 @@
           change over 5 runs
         </h3>
 
-        <label for="bucketSelect">Select Uncertainty Bucket:</label>
+        <label for="bucketSelect">Select Certainty Bucket:</label>
         <select bind:value={selectedBucket} on:change={updateTable}>
           {#each Object.keys(bucketRanges) as bucket}
             <option value={bucket}>{bucket}</option>
@@ -1231,7 +1384,17 @@
 
       {#if filteredAnnotations.length > 0}
         <div class="chart-container">
-          <h3>Annotations in "{selectedBucket}" Across 5 Model Runs</h3>
+          <h3>
+            Annotations in "{selectedBucket}" Across 5 Model Runs
+            <span
+              class="tooltip-container"
+              data-tooltip="Here we show the actual label and numerical estimate of certainty from each run on each article.
+            The rows shown here are filtered by selected certainty bucket, if one of the runs have certainty level that fall into the selected bucket,
+            the article is shown here."
+            >
+              <Fa icon={faCircleInfo} style="opacity: 0.5;" />
+            </span>
+          </h3>
           <p>
             Note: For more details, numbers below each prediction are
             probabilities, scaled by: <br /> "Very Likely": 0.8 ≤ P ≤ 1.0
@@ -1289,15 +1452,18 @@
       {/if}
 
       <div class="chart-container">
-        <h3>Inter-Annotator Agreement Across Uncertainty Buckets</h3>
+        <h3>
+          Inter-Annotator Agreement Across Uncertainty Buckets <span
+            class="tooltip-container"
+            data-tooltip="Here we show the inter-annotator agreements amongst the 5 model runs. Fleiss' Kappa 
+          calculates the degree of agreement in classification over that which would be expected by chance. 
+          Percent agreement is calculated for reference. In percent agreement, 5/5 is counted as agree, others are counted as not agree. 
+          Note that some buckets may have very few data points, yielding less reliable results."
+          >
+            <Fa icon={faCircleInfo} style="opacity: 0.5;" />
+          </span>
+        </h3>
         <canvas bind:this={chartCanvasIAA}></canvas>
-      </div>
-    {/if}
-
-    {#if selectedOptions.allPromptsBucket}
-      <div class="chart-container">
-        <h3>Uncertainty Trends Across All Prompts</h3>
-        <canvas bind:this={uncertaintyTrendsCanvas}></canvas>
       </div>
     {/if}
   </div>
@@ -1406,5 +1572,40 @@
   .checkbox-group-c:checked {
     background-color: #7eb7f5;
     color: white;
+  }
+
+  /* Hover show info */
+  .tooltip-container {
+    position: relative;
+    display: inline-block;
+    cursor: pointer;
+  }
+
+  .tooltip-container:hover::after {
+    visibility: visible;
+    opacity: 1;
+  }
+
+  .tooltip-container::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-30%);
+    background-color: rgb(245, 245, 245, 0.95);
+    border: 2px solid #b2b2b2;
+    color: black;
+    padding: 10px;
+    font-size: 13px;
+    font-weight: 400;
+    border-radius: 6px;
+    width: 500px;
+    text-align: left;
+    white-space: normal; /* text wrapping */
+    line-height: 1.4;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.2s ease-in-out;
+    z-index: 10;
   }
 </style>

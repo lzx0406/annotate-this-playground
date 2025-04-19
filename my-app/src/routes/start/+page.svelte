@@ -25,8 +25,9 @@
   <div class="container">
     <div class="button-group">
       <a href="/prompts">Go to your personal Home page</a>
-      <a href="/tutorial-page">Go to tutorial on how to use this application</a>
-      <a href="/tutorial-prompt">Go to tutorial on how to write prompts</a>
+      <a href="/tutorial-page">Go to tutorials on how to use this application</a
+      >
+      <!-- <a href="/tutorial-prompt">Go to tutorial on how to write prompts</a> -->
     </div>
   </div>
 </section>
